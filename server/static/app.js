@@ -10,7 +10,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp
 const T = {
   ar: {
     today:'اليوم', yesterday:'أمس', d7:'٧ أيام', d30:'٣٠ يوماً', month:'هذا الشهر', custom:'مخصص',
-    refresh:'تحديث', logout:'خروج', lang:'EN', allDevices:'كل الأجهزة', devices:'الأجهزة',
+    refresh:'تحديث', logout:'خروج', lang:'EN', allDevices:'كل الأجهزة', devices:'الأجهزة', done:'تم',
     overview:'نظرة عامة', apps:'التطبيقات', browse:'التصفح', net:'الشبكة',
     screenTime:'وقت الاستخدام', avgPerDay:'المتوسط اليومي', sessions:'جلسات الاستخدام', appsUsed:'تطبيقات مستخدمة',
     sites:'صفحات مفتوحة', domains:'مواقع مختلفة', outages:'عدد الانقطاعات', outageTime:'مدة الانقطاع', availability:'نسبة الاتصال',
@@ -42,6 +42,15 @@ const T = {
     hourly:'كل ساعة', unrestricted:'إرسال كل البيانات المتاحة (بلا تقييد بالأقسام)',
     perDevice:'إرسال تقرير إضافي منفصل لكل جهاز', wifiSpeed:'سرعة واي فاي', pollIntervalS:'فترة التحديث (ثوانٍ)',
     pollIntervalHint:'كل كم ثانية يرسل الهاتف بياناته — رقم أصغر = أقرب للفوري لكنه يستهلك بطارية أكثر',
+    mailTransport:'إعدادات الإرسال', provider:'طريقة الإرسال', providerSmtp:'SMTP', providerGraph:'Microsoft Graph',
+    graphTenantId:'معرّف المستأجر (Tenant ID)', graphClientId:'معرّف التطبيق (Client ID)',
+    graphClientSecret:'سر التطبيق (Client Secret)', graphClientSecretHint:'اتركه فارغاً للإبقاء على القيمة الحالية',
+    graphSender:'البريد المُرسِل (UPN)', testRecipient:'بريد الاختبار',
+    reportSchedules:'جلسات إرسال التقارير', addSchedule:'إضافة جلسة', editSchedule:'تعديل الجلسة',
+    scheduleName:'اسم الجلسة (اختياري)', localTime:'الوقت (بتوقيت السيرفر المحلي)', once:'لمرة واحدة',
+    onceDate:'التاريخ', weekday:'يوم الأسبوع', enabledQ:'مفعّلة', devicesFilter:'الأجهزة المشمولة (فارغ = الكل)',
+    edit:'تعديل', add:'إضافة', update:'تحديث', nameCol:'الاسم', timeCol:'الوقت', statusCol:'الحالة',
+    on_:'مفعّلة', off_:'متوقفة', mon:'إثنين', tue:'ثلاثاء', wed:'أربعاء', thu:'خميس', fri:'جمعة', sat:'سبت', sun:'أحد',
     remote:'تحكم عن بعد', remoteStart:'بدء التحكم عن بعد', remoteStop:'إيقاف', remoteWaiting:'بانتظار أول صورة من الهاتف…',
     remoteBack:'رجوع', remoteHome:'الرئيسية', remoteRecents:'الأخيرة', remoteSendText:'إرسال نص',
     remoteTextPh:'اكتب نصاً لإرساله إلى الحقل المُركَّز عليه في الهاتف', remoteHint:'انقر على الصورة للنقر على الهاتف. اسحب للتمرير.',
@@ -59,7 +68,7 @@ const T = {
   },
   en: {
     today:'Today', yesterday:'Yesterday', d7:'7 days', d30:'30 days', month:'This month', custom:'Custom',
-    refresh:'Refresh', logout:'Logout', lang:'عربي', allDevices:'All devices', devices:'Devices',
+    refresh:'Refresh', logout:'Logout', lang:'عربي', allDevices:'All devices', devices:'Devices', done:'Done',
     overview:'Overview', apps:'Apps', browse:'Browsing', net:'Network',
     screenTime:'Screen time', avgPerDay:'Daily average', sessions:'Usage sessions', appsUsed:'Apps used',
     sites:'Pages opened', domains:'Distinct sites', outages:'Outages', outageTime:'Outage time', availability:'Connectivity',
@@ -83,6 +92,14 @@ const T = {
   editLabel:'Edit name', settings:'Settings', emailReports:'Email reports',
     emailEnabled:'Enable sending', smtpHost:'SMTP host', smtpPort:'Port', smtpUser:'Username / email',
     smtpPass:'SMTP password', smtpPassHint:'Leave blank to keep the current value', useTls:'Use TLS',
+    mailTransport:'Mail transport', provider:'Send via', providerSmtp:'SMTP', providerGraph:'Microsoft Graph',
+    graphTenantId:'Tenant ID', graphClientId:'Client ID', graphClientSecret:'Client secret',
+    graphClientSecretHint:'Leave blank to keep the current value', graphSender:'Sender mailbox (UPN)',
+    testRecipient:'Test recipient', reportSchedules:'Report sending sessions', addSchedule:'Add session',
+    editSchedule:'Edit session', scheduleName:'Session name (optional)', localTime:'Time (server local time)',
+    once:'Once', onceDate:'Date', weekday:'Weekday', enabledQ:'Enabled', devicesFilter:'Devices included (empty = all)',
+    edit:'Edit', add:'Add', update:'Update', nameCol:'Name', timeCol:'Time', statusCol:'Status',
+    on_:'Enabled', off_:'Disabled', mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun',
     recipient:'Recipient email', frequency:'Frequency', daily:'Daily', weekly:'Weekly', hourUtc:'Send hour (UTC)',
     sections:'Sections to send', secOverview:'Overview', secApps:'Apps', secData:'Data usage', secNet:'Network', secDevices:'Devices',
     saveSettings:'Save settings', testSend:'Send test now', savedOk:'Saved', testSentOk:'Sent successfully',
@@ -564,63 +581,154 @@ async function renderDevices() {
   });
 }
 
+const WEEKDAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
+let scheduleEditId = null; // null = "add" form; an id = editing that session
+
+function scheduleFormHtml(sch, devices) {
+  const s = sch || { name: '', recipient: '', frequency: 'daily', localTime: '08:00', weekday: 0, onceDate: '',
+                      sections: ['overview', 'apps', 'net'], unrestricted: false, perDevice: false, deviceIds: [], enabled: true };
+  return `
+    <div class="formgrid">
+      <label>${t('scheduleName')}<input id="rsName" value="${esc(s.name)}"></label>
+      <label>${t('recipient')}<input id="rsRecipient" type="email" value="${esc(s.recipient)}" placeholder="a@x.com, b@x.com"></label>
+      <label>${t('frequency')}<select id="rsFreq">
+        <option value="daily" ${s.frequency==='daily'?'selected':''}>${t('daily')}</option>
+        <option value="weekly" ${s.frequency==='weekly'?'selected':''}>${t('weekly')}</option>
+        <option value="once" ${s.frequency==='once'?'selected':''}>${t('once')}</option>
+      </select></label>
+      <label>${t('localTime')}<input id="rsTime" type="time" value="${esc(s.localTime)}"></label>
+      <label id="rsWeekdayWrap" style="${s.frequency==='weekly'?'':'display:none'}">${t('weekday')}<select id="rsWeekday">
+        ${WEEKDAY_KEYS.map((k, i) => `<option value="${i}" ${s.weekday===i?'selected':''}>${t(k)}</option>`).join('')}
+      </select></label>
+      <label id="rsDateWrap" style="${s.frequency==='once'?'':'display:none'}">${t('onceDate')}<input id="rsDate" type="date" value="${esc(s.onceDate)}"></label>
+    </div>
+    <label class="chk" style="margin-top:10px"><input type="checkbox" id="rsEnabled" ${s.enabled ? 'checked' : ''}> ${t('enabledQ')}</label>
+    <label class="chk"><input type="checkbox" id="rsUnrestricted" ${s.unrestricted ? 'checked' : ''}> ${t('unrestricted')}</label>
+    <label class="chk"><input type="checkbox" id="rsPerDevice" ${s.perDevice ? 'checked' : ''}> ${t('perDevice')}</label>
+    <div class="muted" id="rsSecLabel" style="margin:10px 0 4px${s.unrestricted ? ';opacity:.4' : ''}">${t('sections')}</div>
+    <div class="seclist" id="rsSecList" style="${s.unrestricted ? 'opacity:.4;pointer-events:none' : ''}">
+      ${['overview','apps','data','net','devices'].map(k => `<label class="chk"><input type="checkbox" class="rsSec" value="${k}" ${s.sections.includes(k) ? 'checked' : ''}> ${t('sec'+k[0].toUpperCase()+k.slice(1))}</label>`).join('')}
+    </div>
+    <div class="muted" style="margin:10px 0 4px">${t('devicesFilter')}</div>
+    <div class="seclist" id="rsDevList">
+      ${devices.map(d => `<label class="chk"><input type="checkbox" class="rsDev" value="${d.id}" ${s.deviceIds.includes(d.id) ? 'checked' : ''}> ${esc(d.name)}</label>`).join('')}
+    </div>
+    <button class="pbtn" id="rsSave" style="margin-top:14px">${t(sch ? 'update' : 'add')}</button>
+    ${sch ? `<button class="tbtn" id="rsCancel" style="margin-top:14px;margin-inline-start:8px">${t('cancel')}</button>` : ''}`;
+}
+
 async function renderSettings() {
-  const [es, mem] = await Promise.all([api('/api/email-settings'), api('/api/memory?' + qs())]);
+  const [es, schedules, devices, mem] = await Promise.all([
+    api('/api/email-settings'), api('/api/report-schedules'), api('/api/devices'), api('/api/memory?' + qs()),
+  ]);
   const latest = mem.latest;
   const memParts = latest ? [
     { name: t('memUsed'), v: latest.usedMb, color: '#d6577a' },
     { name: t('memFree'), v: Math.max(0, (latest.totalMb||0) - (latest.usedMb||0)), color: '#1ba39c' },
   ] : [];
+  const editing = scheduleEditId ? schedules.find(s => s.id === scheduleEditId) : null;
   $('#main').innerHTML = `
     <div class="grid cols2">
-      <div class="card"><h3>${t('emailReports')}</h3>
-        <label class="chk"><input type="checkbox" id="esEnabled" ${es.enabled ? 'checked' : ''}> ${t('emailEnabled')}</label>
+      <div class="card"><h3>${t('mailTransport')}</h3>
         <div class="formgrid">
-          <label>${t('smtpHost')}<input id="esHost" value="${esc(es.smtpHost)}" placeholder="smtp.gmail.com"></label>
-          <label>${t('smtpPort')}<input id="esPort" type="number" value="${es.smtpPort}"></label>
-          <label>${t('smtpUser')}<input id="esUser" value="${esc(es.smtpUser)}"></label>
-          <label>${t('smtpPass')}<input id="esPass" type="password" placeholder="${esc(es.hasPassword ? '••••••••' : '')}"><span class="hint">${t('smtpPassHint')}</span></label>
-          <label class="chk"><input type="checkbox" id="esTls" ${es.useTls ? 'checked' : ''}> ${t('useTls')}</label>
-          <label>${t('recipient')}<input id="esRecipient" type="email" value="${esc(es.recipient)}"></label>
-          <label>${t('frequency')}<select id="esFreq">
-            <option value="hourly" ${es.frequency==='hourly'?'selected':''}>${t('hourly')}</option>
-            <option value="daily" ${es.frequency==='daily'?'selected':''}>${t('daily')}</option>
-            <option value="weekly" ${es.frequency==='weekly'?'selected':''}>${t('weekly')}</option>
+          <label>${t('provider')}<select id="esProvider">
+            <option value="smtp" ${es.provider==='smtp'?'selected':''}>${t('providerSmtp')}</option>
+            <option value="graph" ${es.provider==='graph'?'selected':''}>${t('providerGraph')}</option>
           </select></label>
-          <label class="${es.frequency==='hourly'?'muted':''}">${t('hourUtc')}<input id="esHour" type="number" min="0" max="23" value="${es.hourUtc}" ${es.frequency==='hourly'?'disabled':''}></label>
         </div>
-        <label class="chk" style="margin-top:10px"><input type="checkbox" id="esUnrestricted" ${es.unrestricted ? 'checked' : ''}> ${t('unrestricted')}</label>
-        <label class="chk"><input type="checkbox" id="esPerDevice" ${es.perDevice ? 'checked' : ''}> ${t('perDevice')}</label>
-        <div class="muted" id="esSecLabel" style="margin:10px 0 4px${es.unrestricted ? ';opacity:.4' : ''}">${t('sections')}</div>
-        <div class="seclist" id="esSecList" style="${es.unrestricted ? 'opacity:.4;pointer-events:none' : ''}">
-          ${['overview','apps','data','net','devices'].map(s => `<label class="chk"><input type="checkbox" class="esSec" value="${s}" ${es.sections.includes(s) ? 'checked' : ''}> ${t('sec'+s[0].toUpperCase()+s.slice(1))}</label>`).join('')}
+        <div id="esSmtpFields" style="${es.provider==='graph'?'display:none':''}">
+          <div class="formgrid">
+            <label>${t('smtpHost')}<input id="esHost" value="${esc(es.smtpHost)}" placeholder="smtp.gmail.com"></label>
+            <label>${t('smtpPort')}<input id="esPort" type="number" value="${es.smtpPort}"></label>
+            <label>${t('smtpUser')}<input id="esUser" value="${esc(es.smtpUser)}"></label>
+            <label>${t('smtpPass')}<input id="esPass" type="password" placeholder="${esc(es.hasPassword ? '••••••••' : '')}"><span class="hint">${t('smtpPassHint')}</span></label>
+          </div>
+          <label class="chk"><input type="checkbox" id="esTls" ${es.useTls ? 'checked' : ''}> ${t('useTls')}</label>
         </div>
-        ${es.lastSent ? `<div class="muted" style="margin-top:8px">${t('lastSent')}: ${esc(fmtTs(es.lastSent))}</div>` : ''}
+        <div id="esGraphFields" style="${es.provider==='graph'?'':'display:none'}">
+          <div class="formgrid">
+            <label>${t('graphTenantId')}<input id="esTenant" value="${esc(es.graphTenantId)}"></label>
+            <label>${t('graphClientId')}<input id="esClientId" value="${esc(es.graphClientId)}"></label>
+            <label>${t('graphClientSecret')}<input id="esSecret" type="password" placeholder="${esc(es.hasGraphSecret ? '••••••••' : '')}"><span class="hint">${t('graphClientSecretHint')}</span></label>
+            <label>${t('graphSender')}<input id="esSender" type="email" value="${esc(es.graphSender)}"></label>
+          </div>
+        </div>
         <button class="pbtn" id="esSave" style="margin-top:14px">${t('saveSettings')}</button>
-        <button class="tbtn" id="esTest" style="margin-top:14px;margin-inline-start:8px">${t('testSend')}</button>
+        <div class="formgrid" style="margin-top:14px">
+          <label>${t('testRecipient')}<input id="esTestTo" type="email"></label>
+        </div>
+        <button class="tbtn" id="esTest">${t('testSend')}</button>
       </div>
       <div class="card"><h3>${t('memPie')}</h3>${latest ? pieChart(memParts, v => v + ' MB') : `<div class="empty">${t('noData')}</div>`}</div>
-    </div>`;
-  $('#esFreq').onchange = () => { $('#esHour').disabled = $('#esFreq').value === 'hourly'; };
-  $('#esUnrestricted').onchange = e => {
-    const on = e.target.checked;
-    $('#esSecList').style.cssText = on ? 'opacity:.4;pointer-events:none' : '';
-    $('#esSecLabel').style.opacity = on ? '.4' : '';
+    </div>
+    <div class="card"><h3>${editing ? t('editSchedule') : t('addSchedule')}</h3>${scheduleFormHtml(editing, devices)}</div>
+    <div class="card"><h3>${t('reportSchedules')}</h3><div id="tbl"></div></div>`;
+
+  $('#esProvider').onchange = () => {
+    const graph = $('#esProvider').value === 'graph';
+    $('#esSmtpFields').style.display = graph ? 'none' : '';
+    $('#esGraphFields').style.display = graph ? '' : 'none';
   };
   $('#esSave').onclick = async () => {
     await jpost('/api/email-settings', {
-      enabled: $('#esEnabled').checked, smtpHost: $('#esHost').value.trim(), smtpPort: parseInt($('#esPort').value) || 587,
+      provider: $('#esProvider').value,
+      smtpHost: $('#esHost').value.trim(), smtpPort: parseInt($('#esPort').value) || 587,
       smtpUser: $('#esUser').value.trim(), smtpPass: $('#esPass').value, useTls: $('#esTls').checked,
-      recipient: $('#esRecipient').value.trim(), frequency: $('#esFreq').value, hourUtc: parseInt($('#esHour').value) || 0,
-      sections: [...document.querySelectorAll('.esSec:checked')].map(c => c.value),
-      unrestricted: $('#esUnrestricted').checked, perDevice: $('#esPerDevice').checked,
+      graphTenantId: $('#esTenant').value.trim(), graphClientId: $('#esClientId').value.trim(),
+      graphClientSecret: $('#esSecret').value, graphSender: $('#esSender').value.trim(),
     }, 'PUT');
     toast(t('savedOk')); renderSettings();
   };
   $('#esTest').onclick = async () => {
-    const r = await jpost('/api/email-settings/test', {}, 'POST');
+    const recipient = $('#esTestTo').value.trim();
+    if (!recipient) { toast(t('testRecipient')); return; }
+    const r = await jpost('/api/email-settings/test', { recipient }, 'POST');
     toast(r.ok ? t('testSentOk') : t('testFail') + ': ' + (r.error || ''));
   };
+
+  $('#rsFreq').onchange = () => {
+    const f = $('#rsFreq').value;
+    $('#rsWeekdayWrap').style.display = f === 'weekly' ? '' : 'none';
+    $('#rsDateWrap').style.display = f === 'once' ? '' : 'none';
+  };
+  $('#rsUnrestricted').onchange = e => {
+    const on = e.target.checked;
+    $('#rsSecList').style.cssText = on ? 'opacity:.4;pointer-events:none' : '';
+    $('#rsSecLabel').style.opacity = on ? '.4' : '';
+  };
+  if ($('#rsCancel')) $('#rsCancel').onclick = () => { scheduleEditId = null; renderSettings(); };
+  $('#rsSave').onclick = async () => {
+    const payload = {
+      name: $('#rsName').value.trim(), recipient: $('#rsRecipient').value.trim(), frequency: $('#rsFreq').value,
+      localTime: $('#rsTime').value || '08:00', weekday: parseInt($('#rsWeekday').value, 10),
+      onceDate: $('#rsDate').value, enabled: $('#rsEnabled').checked,
+      sections: [...document.querySelectorAll('.rsSec:checked')].map(c => c.value),
+      unrestricted: $('#rsUnrestricted').checked, perDevice: $('#rsPerDevice').checked,
+      deviceIds: [...document.querySelectorAll('.rsDev:checked')].map(c => parseInt(c.value, 10)),
+    };
+    if (!payload.recipient) { toast(t('recipient')); return; }
+    if (scheduleEditId) await jpost(`/api/report-schedules/${scheduleEditId}`, payload, 'PUT');
+    else await jpost('/api/report-schedules', payload, 'POST');
+    scheduleEditId = null;
+    toast(t('savedOk')); renderSettings();
+  };
+
+  const tbl = $('#tbl');
+  makeTable(tbl, { id: 'schedules', id_: 'id', rows: schedules, sortKey: 'localTime', sortDir: 'asc', deletable: 'report_schedules', reload: renderSettings, freeze: 1, cols: [
+    { k: 'name', label: t('nameCol'), w: 140, text: x => x.name || (x.frequency === 'weekly' ? t(WEEKDAY_KEYS[x.weekday]) : t(x.frequency)) },
+    { k: 'recipient', label: t('recipient'), w: 200 },
+    { k: 'localTime', label: t('timeCol'), w: 90,
+      text: x => `${x.localTime} · ${x.frequency === 'weekly' ? t(WEEKDAY_KEYS[x.weekday]) : x.frequency === 'once' ? x.onceDate : t('daily')}` },
+    { k: 'enabled', label: t('statusCol'), w: 90, text: x => x.enabled ? t('on_') : t('off_') },
+    { k: 'lastSent', label: t('lastSent'), w: 140, text: x => x.lastSent ? fmtTs(x.lastSent) : '—' },
+    { k: 'edit', label: '', w: 70, html: x => `<button class="rsEditBtn" data-id="${x.id}">${t('edit')}</button>`, text: () => '' },
+  ] });
+  tbl.addEventListener('click', e => {
+    const b = e.target.closest('.rsEditBtn[data-id]');
+    if (!b) return;
+    scheduleEditId = parseInt(b.dataset.id, 10);
+    renderSettings();
+  });
 }
 
 // ── users (superadmin only) ─────────────────────────────────────────────
@@ -806,13 +914,26 @@ function renderDevPop() {
   const n = sel ? sel.length : all.length;
   $('#devSummary').textContent = `${t('devices')}: ${sel ? n + ' / ' + all.length : t('allDevices') + ' (' + all.length + ')'}`;
   $('#devList').innerHTML = `<label><input type="checkbox" id="devAll" ${!sel ? 'checked' : ''}> <b>${t('allDevices')} (${all.length})</b></label><div class="sep"></div>` +
-    all.map(d => `<label><input type="checkbox" class="devcb" value="${d.id}" ${!sel || sel.includes(d.id) ? 'checked' : ''}> ${esc(d.name)}</label>`).join('');
+    all.map(d => `<label><input type="checkbox" class="devcb" value="${d.id}" ${!sel || sel.includes(d.id) ? 'checked' : ''}> ${esc(d.name)}</label>`).join('') +
+    `<div class="sep"></div><button type="button" class="btn" id="devDone" style="width:100%">${t('done')}</button>`;
   $('#devAll').onchange = e => { S.devices = null; renderDevPop(); load(); };
   $('#devList').querySelectorAll('.devcb').forEach(cb => cb.onchange = () => {
     const ids = [...$('#devList').querySelectorAll('.devcb')].filter(x => x.checked).map(x => parseInt(x.value, 10));
     S.devices = ids.length === all.length || !ids.length ? null : ids; renderDevPop(); load();
   });
+  // Explicit close (mobile-friendly) — the popover otherwise stays open
+  // until the summary is clicked again, which reads as "stuck".
+  $('#devDone').onclick = () => { $('#devPop').open = false; };
 }
+// Click outside the device popover (or press Escape) closes it too.
+document.addEventListener('click', e => {
+  const pop = $('#devPop');
+  if (pop && pop.open && !pop.contains(e.target)) pop.open = false;
+});
+document.addEventListener('keydown', e => {
+  const pop = $('#devPop');
+  if (pop && pop.open && e.key === 'Escape') pop.open = false;
+});
 function renderTabs() {
   const tb = $('#tabs'); if (!tb) return;
   const tabLabel = { devices: 'devices', data: 'dataUsage', settings: 'settings', users: 'users' };

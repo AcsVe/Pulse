@@ -13,7 +13,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import stats
 import mailer
 from models import (db, now_ms, sha256, Device, UsageSession, NetEvent, BrowseEvent,
-                    DataUsage, DeviceSample, AppLabelOverride, EmailSettings, RemoteCommand, User)
+                    DataUsage, DeviceSample, AppLabelOverride, EmailSettings, ReportSchedule, RemoteCommand, User)
 
 
 def create_app(test_config=None):
@@ -536,30 +536,26 @@ def create_app(test_config=None):
             s = EmailSettings(id=1)
             db.session.add(s)
             db.session.commit()
-        return jsonify(s.to_dict())
+        return jsonify(s.to_dict(include_secrets=True))
 
     @app.route('/api/email-settings', methods=['PUT'])
     @superadmin_required
     def email_settings_set():
         data = request.get_json(silent=True) or {}
         s = db.session.get(EmailSettings, 1) or EmailSettings(id=1)
-        s.enabled = bool(data.get('enabled', s.enabled))
+        provider = data.get('provider') or s.provider or 'smtp'
+        s.provider = provider if provider in ('smtp', 'graph') else 'smtp'
         s.smtp_host = (data.get('smtpHost') or s.smtp_host or '')[:200]
         s.smtp_port = int(data.get('smtpPort') or s.smtp_port or 587)
         s.smtp_user = (data.get('smtpUser') or s.smtp_user or '')[:200]
         if data.get('smtpPass'):
             s.smtp_pass = data['smtpPass'][:200]
         s.use_tls = bool(data.get('useTls', s.use_tls if s.use_tls is not None else True))
-        s.recipient = (data.get('recipient') or s.recipient or '')[:300]
-        freq = data.get('frequency') or s.frequency or 'daily'
-        s.frequency = freq if freq in ('hourly', 'daily', 'weekly') else 'daily'
-        s.hour_utc = int(data.get('hourUtc', s.hour_utc if s.hour_utc is not None else 6))
-        if 'sections' in data and isinstance(data['sections'], list):
-            s.sections = ','.join(data['sections'])
-        if 'unrestricted' in data:
-            s.unrestricted = bool(data['unrestricted'])
-        if 'perDevice' in data:
-            s.per_device = bool(data['perDevice'])
+        s.graph_tenant_id = (data.get('graphTenantId') or s.graph_tenant_id or '')[:100]
+        s.graph_client_id = (data.get('graphClientId') or s.graph_client_id or '')[:100]
+        if data.get('graphClientSecret'):
+            s.graph_client_secret = data['graphClientSecret'][:300]
+        s.graph_sender = (data.get('graphSender') or s.graph_sender or '')[:200]
         db.session.add(s)
         db.session.commit()
         return jsonify(s.to_dict())
@@ -568,15 +564,70 @@ def create_app(test_config=None):
     @superadmin_required
     def email_settings_test():
         s = db.session.get(EmailSettings, 1)
-        if not s or not s.recipient or not s.smtp_host:
+        data = request.get_json(silent=True) or {}
+        recipient = (data.get('recipient') or '').strip()
+        if not s or not mailer.transport_ready(s):
             return jsonify({'ok': False, 'error': 'not_configured'}), 400
+        if not recipient:
+            return jsonify({'ok': False, 'error': 'recipient_required'}), 400
         try:
-            sections = mailer.ALL_SECTIONS if s.unrestricted else ([sec for sec in (s.sections or '').split(',') if sec] or ['overview'])
-            html = mailer.build_report_html(sections, 'تجريبي')
-            mailer.send_email(s, 'تقرير Pulse (تجريبي)', html)
+            html = mailer.build_report_html(mailer.ALL_SECTIONS, 'تجريبي')
+            mailer.send_email(s, recipient, 'تقرير Pulse (تجريبي)', html)
             return jsonify({'ok': True})
         except Exception as e:
             return jsonify({'ok': False, 'error': str(e)}), 400
+
+    # ── report schedules (multiple independent "sessions") ───────────────
+    @app.route('/api/report-schedules', methods=['GET'])
+    @superadmin_required
+    def report_schedules_list():
+        return jsonify([s.to_dict() for s in ReportSchedule.query.order_by(ReportSchedule.id).all()])
+
+    def _apply_schedule_fields(s, data):
+        s.name = (data.get('name') or '')[:100]
+        s.enabled = bool(data.get('enabled', True))
+        s.recipient = (data.get('recipient') or '')[:300]
+        freq = data.get('frequency') or 'daily'
+        s.frequency = freq if freq in ('daily', 'weekly', 'once') else 'daily'
+        s.local_time = (data.get('localTime') or '08:00')[:5]
+        s.weekday = data.get('weekday') if data.get('weekday') in range(0, 7) else None
+        s.once_date = (data.get('onceDate') or '')[:10] or None
+        if isinstance(data.get('sections'), list):
+            s.sections = ','.join(data['sections'])
+        s.unrestricted = bool(data.get('unrestricted', False))
+        s.per_device = bool(data.get('perDevice', False))
+        if isinstance(data.get('deviceIds'), list):
+            s.device_ids = ','.join(str(int(x)) for x in data['deviceIds'] if str(x).isdigit())
+
+    @app.route('/api/report-schedules', methods=['POST'])
+    @superadmin_required
+    def report_schedules_create():
+        data = request.get_json(silent=True) or {}
+        s = ReportSchedule()
+        _apply_schedule_fields(s, data)
+        db.session.add(s)
+        db.session.commit()
+        return jsonify(s.to_dict())
+
+    @app.route('/api/report-schedules/<int:sid>', methods=['PUT'])
+    @superadmin_required
+    def report_schedules_update(sid):
+        s = db.session.get(ReportSchedule, sid)
+        if not s:
+            return jsonify({'error': 'not_found'}), 404
+        data = request.get_json(silent=True) or {}
+        _apply_schedule_fields(s, data)
+        db.session.commit()
+        return jsonify(s.to_dict())
+
+    @app.route('/api/report-schedules/<int:sid>', methods=['DELETE'])
+    @superadmin_required
+    def report_schedules_delete(sid):
+        s = db.session.get(ReportSchedule, sid)
+        if s:
+            db.session.delete(s)
+            db.session.commit()
+        return jsonify({'ok': True})
 
     @app.route('/api/cron/send-reports', methods=['GET', 'POST'])
     def cron_send_reports():
@@ -784,6 +835,10 @@ def create_app(test_config=None):
             if supers_left < 1:
                 to_delete = [i for i in to_delete if db.session.get(User, i).role != 'superadmin']
             n = User.query.filter(User.id.in_(to_delete)).delete(synchronize_session=False) if to_delete else 0
+        elif table == 'report_schedules':
+            if not u or u.role != 'superadmin':
+                return jsonify({'error': 'unauthorized'}), 401
+            n = ReportSchedule.query.filter(ReportSchedule.id.in_([int(i) for i in ids])).delete(synchronize_session=False)
         else:
             return jsonify({'error': 'unknown_table'}), 400
         db.session.commit()

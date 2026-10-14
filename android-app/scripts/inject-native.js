@@ -95,6 +95,15 @@ if (!manifest.includes('xmlns:tools=')) {
   manifest = manifest.replace('<manifest ', '<manifest xmlns:tools="http://schemas.android.com/tools" ');
 }
 
+// Pulse talks to a plain-HTTP server on the user's own LAN (no TLS cert is
+// practical for a local IP), but Android blocks cleartext (non-HTTPS)
+// traffic by default for apps targeting API 28+. Without this, enrollment
+// and sync silently fail to reach an http:// server while the same URL
+// works fine in a browser (the OS cleartext block is per-app, not global).
+if (!manifest.includes('android:usesCleartextTraffic=')) {
+  manifest = manifest.replace('<application', '<application\n        android:usesCleartextTraffic="true"');
+}
+
 // 4b. Wrap MainActivity's launcher intent-filter in a toggleable activity-alias,
 // so the icon can be hidden/shown at runtime (IconVisibility.hide/show) without
 // touching MainActivity itself. Idempotent: skipped if already wrapped.

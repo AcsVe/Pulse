@@ -89,16 +89,55 @@ class PulseApiTests(unittest.TestCase):
     def test_email_settings_roundtrip(self):
         self.login()
         r = self.client.put('/api/email-settings', json={
-            'enabled': True, 'smtpHost': 'smtp.example.com', 'smtpUser': 'me@example.com',
-            'smtpPass': 'secret', 'recipient': 'owner@example.com', 'frequency': 'daily', 'hourUtc': 6,
-            'sections': ['overview', 'apps'],
+            'provider': 'smtp', 'smtpHost': 'smtp.example.com', 'smtpUser': 'me@example.com',
+            'smtpPass': 'secret',
         })
         body = r.get_json()
         self.assertTrue(body['hasPassword'])
         self.assertNotIn('smtpPass', body)
         g = self.client.get('/api/email-settings').get_json()
-        self.assertEqual(g['recipient'], 'owner@example.com')
-        self.assertEqual(g['sections'], ['overview', 'apps'])
+        self.assertEqual(g['smtpHost'], 'smtp.example.com')
+        self.assertEqual(g['provider'], 'smtp')
+
+    def test_email_settings_graph_provider_roundtrip(self):
+        self.login()
+        r = self.client.put('/api/email-settings', json={
+            'provider': 'graph', 'graphTenantId': 'tenant-1', 'graphClientId': 'client-1',
+            'graphClientSecret': 'shh', 'graphSender': 'sender@example.com',
+        })
+        body = r.get_json()
+        self.assertEqual(body['provider'], 'graph')
+        self.assertTrue(body['hasGraphSecret'])
+        self.assertNotIn('graphClientSecret', body)
+        g = self.client.get('/api/email-settings').get_json()
+        self.assertEqual(g['graphTenantId'], 'tenant-1')
+        self.assertEqual(g['graphSender'], 'sender@example.com')
+
+    def test_report_schedule_crud(self):
+        self.login()
+        r = self.client.post('/api/report-schedules', json={
+            'name': 'Morning', 'recipient': 'owner@example.com', 'frequency': 'daily',
+            'localTime': '08:00', 'sections': ['overview', 'apps'],
+        })
+        sch = r.get_json()
+        self.assertEqual(sch['recipient'], 'owner@example.com')
+        self.assertEqual(sch['sections'], ['overview', 'apps'])
+        self.assertEqual(sch['localTime'], '08:00')
+
+        r2 = self.client.put(f'/api/report-schedules/{sch["id"]}', json={
+            'name': 'Morning', 'recipient': 'owner@example.com', 'frequency': 'weekly',
+            'localTime': '09:30', 'weekday': 2, 'sections': ['overview'],
+        })
+        updated = r2.get_json()
+        self.assertEqual(updated['frequency'], 'weekly')
+        self.assertEqual(updated['weekday'], 2)
+
+        lst = self.client.get('/api/report-schedules').get_json()
+        self.assertEqual(len(lst), 1)
+
+        self.client.delete(f'/api/report-schedules/{sch["id"]}')
+        lst2 = self.client.get('/api/report-schedules').get_json()
+        self.assertEqual(len(lst2), 0)
 
     def test_cron_endpoint_requires_key(self):
         r = self.client.get('/api/cron/send-reports')
@@ -165,14 +204,15 @@ class PulseApiTests(unittest.TestCase):
         state3 = self.client.get('/api/v1/remote-state', headers=auth).get_json()
         self.assertFalse(state3['active'])
 
-    def test_email_settings_unrestricted_and_per_device(self):
+    def test_report_schedule_unrestricted_and_per_device(self):
         self.login()
-        r = self.client.put('/api/email-settings', json={
-            'enabled': True, 'smtpHost': 'smtp.example.com', 'recipient': 'owner@example.com',
-            'frequency': 'hourly', 'unrestricted': True, 'perDevice': True,
+        r = self.client.post('/api/report-schedules', json={
+            'recipient': 'owner@example.com', 'frequency': 'once', 'onceDate': '2026-01-01',
+            'unrestricted': True, 'perDevice': True,
         })
         body = r.get_json()
-        self.assertEqual(body['frequency'], 'hourly')
+        self.assertEqual(body['frequency'], 'once')
+        self.assertEqual(body['onceDate'], '2026-01-01')
         self.assertTrue(body['unrestricted'])
         self.assertTrue(body['perDevice'])
 

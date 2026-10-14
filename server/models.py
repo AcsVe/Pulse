@@ -159,35 +159,73 @@ class AppLabelOverride(db.Model):
 
 
 class EmailSettings(db.Model):
-    """Singleton row (id=1): SMTP config + the scheduled-report settings."""
+    """Singleton row (id=1): the mail *transport* only — how outgoing mail is
+    sent (SMTP or Microsoft Graph). The actual report schedules (when, what,
+    to whom) live in ReportSchedule, so several report "sessions" can share
+    this one transport."""
     __tablename__ = 'email_settings'
     id          = db.Column(db.Integer, primary_key=True)
-    enabled     = db.Column(db.Boolean, default=False)
+    provider    = db.Column(db.String(10), default='smtp')    # smtp | graph
     smtp_host   = db.Column(db.String(200))
     smtp_port   = db.Column(db.Integer, default=587)
     smtp_user   = db.Column(db.String(200))
     smtp_pass   = db.Column(db.String(200))
     use_tls     = db.Column(db.Boolean, default=True)
-    recipient   = db.Column(db.String(300))
-    frequency   = db.Column(db.String(10), default='daily')   # hourly | daily | weekly
-    hour_utc    = db.Column(db.Integer, default=6)            # ignored for 'hourly'
-    sections    = db.Column(db.String(200), default='overview,apps,net')  # which parts to include
-    unrestricted = db.Column(db.Boolean, default=False)       # ignore `sections`, include every available table
-    per_device  = db.Column(db.Boolean, default=False)        # also send one extra report per enrolled device
-    last_sent   = db.Column(db.BigInteger)
+    # Microsoft Graph (app-only / client-credentials): an Entra ID app
+    # registration with Mail.Send application permission, admin-consented.
+    graph_tenant_id     = db.Column(db.String(100))
+    graph_client_id     = db.Column(db.String(100))
+    graph_client_secret = db.Column(db.String(300))
+    graph_sender        = db.Column(db.String(200))           # mailbox UPN to send as
 
     def to_dict(self, include_secrets=False):
         d = {
-            'enabled': self.enabled, 'smtpHost': self.smtp_host or '', 'smtpPort': self.smtp_port or 587,
-            'smtpUser': self.smtp_user or '', 'useTls': self.use_tls, 'recipient': self.recipient or '',
-            'frequency': self.frequency or 'daily', 'hourUtc': self.hour_utc if self.hour_utc is not None else 6,
-            'sections': (self.sections or '').split(',') if self.sections else [],
-            'unrestricted': bool(self.unrestricted), 'perDevice': bool(self.per_device),
-            'lastSent': self.last_sent, 'hasPassword': bool(self.smtp_pass),
+            'provider': self.provider or 'smtp',
+            'smtpHost': self.smtp_host or '', 'smtpPort': self.smtp_port or 587,
+            'smtpUser': self.smtp_user or '', 'useTls': self.use_tls if self.use_tls is not None else True,
+            'hasPassword': bool(self.smtp_pass),
+            'graphTenantId': self.graph_tenant_id or '', 'graphClientId': self.graph_client_id or '',
+            'graphSender': self.graph_sender or '', 'hasGraphSecret': bool(self.graph_client_secret),
         }
         if include_secrets:
             d['smtpPass'] = self.smtp_pass or ''
+            d['graphClientSecret'] = self.graph_client_secret or ''
         return d
+
+
+class ReportSchedule(db.Model):
+    """One scheduled-report "session": its own time/date, recipient and
+    content — several of these can run independently off the one shared
+    mail transport above."""
+    __tablename__ = 'report_schedules'
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(100))                    # optional label, e.g. "تقرير الصباح"
+    enabled     = db.Column(db.Boolean, default=True)
+    recipient   = db.Column(db.String(300))
+    frequency   = db.Column(db.String(10), default='daily')    # daily | weekly | once
+    local_time  = db.Column(db.String(5), default='08:00')     # "HH:MM" in the server's own local time
+    weekday     = db.Column(db.Integer)                        # 0=Mon..6=Sun, used when frequency='weekly'
+    once_date   = db.Column(db.String(10))                     # "YYYY-MM-DD", used when frequency='once'
+    sections    = db.Column(db.String(200), default='overview,apps,net')
+    unrestricted = db.Column(db.Boolean, default=False)
+    per_device  = db.Column(db.Boolean, default=False)
+    device_ids  = db.Column(db.String(300), default='')        # comma-separated device ids, '' = all devices
+    last_sent   = db.Column(db.BigInteger)
+    created_at  = db.Column(db.BigInteger, default=now_ms)
+
+    def dev_id_list(self):
+        return [int(x) for x in (self.device_ids or '').split(',') if x.strip().isdigit()]
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'name': self.name or '', 'enabled': bool(self.enabled),
+            'recipient': self.recipient or '', 'frequency': self.frequency or 'daily',
+            'localTime': self.local_time or '08:00', 'weekday': self.weekday,
+            'onceDate': self.once_date or '',
+            'sections': (self.sections or '').split(',') if self.sections else [],
+            'unrestricted': bool(self.unrestricted), 'perDevice': bool(self.per_device),
+            'deviceIds': self.dev_id_list(), 'lastSent': self.last_sent,
+        }
 
 
 class User(db.Model):
