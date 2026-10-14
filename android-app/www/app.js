@@ -10,8 +10,9 @@ const T = {
     hideIcon: 'إخفاء الأيقونة', showIconBtn: 'إظهار الأيقونة',
     iconHint: 'يبقى إشعار التشغيل ظاهراً دائماً (يفرضه نظام أندرويد) — اضغط عليه في أي وقت لإعادة إظهار الأيقونة وفتح التطبيق.',
     hideConfirm: 'ستختفي أيقونة التطبيق من قائمة التطبيقات. للعودة إليه لاحقاً: اضغط على إشعار "Pulse" الثابت في شريط الإشعارات. متابعة؟',
-    pUsage: 'إحصاءات الاستخدام', pUsageD: 'لرصد التطبيقات المستخدمة ومدتها', pAccess: 'خدمة الوصول', pAccessD: 'لقراءة شريط عنوان المتصفح',
+    pUsage: 'إحصاءات الاستخدام', pUsageD: 'لرصد التطبيقات المستخدمة ومدتها', pAccess: 'خدمة الوصول', pAccessD: 'لقراءة شريط عنوان المتصفح، وضرورية لعمل النقر والسحب عند التحكم عن بعد',
     pBattery: 'تجاهل تحسين البطارية', pBatteryD: 'لإبقاء الخدمة تعمل في الخلفية', pNotif: 'الإشعارات', pNotifD: 'لعرض إشعار تشغيل الخدمة',
+    pAutostart: 'التشغيل التلقائي عند إعادة التشغيل', pAutostartD: 'بعض الهواتف (شاومي، هواوي، أوبو...) توقف هذا تلقائياً — فعّله هنا ليعمل التطبيق دون إعادة فتحه يدوياً',
     pVpn: 'مراقبة DNS', pVpnD: 'لتسجيل أسماء المواقع عبر كل التطبيقات', grant: 'منح', granted: 'ممنوح',
     permError: 'تعذّر فتح هذا الإعداد على هذا الهاتف. جرّب فتحه يدويًا من إعدادات أندرويد.',
     pAdmin: 'حماية إلغاء التثبيت', pAdminD: 'يمنع حذف التطبيق مباشرة دون تعطيل هذه الحماية أولاً من الإعدادات',
@@ -35,8 +36,9 @@ const T = {
     hideIcon: 'Hide app icon', showIconBtn: 'Show app icon',
     iconHint: 'The running notification always stays visible (required by Android) — tap it any time to bring the icon back and reopen the app.',
     hideConfirm: 'The app icon will disappear from your app list. To get back in later: tap the persistent "Pulse" notification. Continue?',
-    pUsage: 'Usage access', pUsageD: 'To track which apps are used and for how long', pAccess: 'Accessibility service', pAccessD: 'To read the browser address bar',
+    pUsage: 'Usage access', pUsageD: 'To track which apps are used and for how long', pAccess: 'Accessibility service', pAccessD: 'To read the browser address bar, and required for tap/swipe to work in remote control',
     pBattery: 'Ignore battery optimization', pBatteryD: 'To keep the background service running', pNotif: 'Notifications', pNotifD: 'To show the running-service notice',
+    pAutostart: 'Autostart on reboot', pAutostartD: 'Some phones (Xiaomi, Huawei, Oppo...) block this by default — enable it here so the app keeps running without opening it by hand',
     pVpn: 'DNS monitoring', pVpnD: 'To log visited domains across all apps', grant: 'Grant', granted: 'Granted',
     permError: "Couldn't open this setting on this phone. Try opening it manually from Android settings.",
     pAdmin: 'Uninstall protection', pAdminD: 'Blocks removing the app until this protection is turned off from Settings first',
@@ -75,6 +77,7 @@ const PERMS = [
   { key: 'notifications', t: 'pNotif', d: 'pNotifD', action: 'requestNotifications' },
   { key: 'vpn', t: 'pVpn', d: 'pVpnD', action: 'requestVpn' },
   { key: 'deviceAdmin', t: 'pAdmin', d: 'pAdminD', action: 'requestDeviceAdmin', statusCall: 'isDeviceAdminActive', optional: true },
+  { key: 'autostart', t: 'pAutostart', d: 'pAutostartD', action: 'requestAutostart', optional: true },
 ];
 
 async function refreshPerms() {

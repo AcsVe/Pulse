@@ -29,6 +29,8 @@ class Device(db.Model):
     last_seen    = db.Column(db.BigInteger)
     ip_address   = db.Column(db.String(64))
     wifi_mbps    = db.Column(db.Integer)                       # last-known Wi-Fi link speed
+    connection_type     = db.Column(db.String(20))             # wifi | cellular | ethernet | none
+    accessibility_enabled = db.Column(db.Boolean)               # None = unknown (older app build / never synced)
     created_at   = db.Column(db.BigInteger, default=now_ms)
     # remote screen view/control
     remote_active   = db.Column(db.Boolean, default=False)
@@ -51,6 +53,8 @@ class Device(db.Model):
             'enrollUntil': self.enroll_until, 'enrolledAt': self.enrolled_at,
             'lastSeen': self.last_seen, 'createdAt': self.created_at,
             'ipAddress': self.ip_address or '', 'wifiMbps': self.wifi_mbps,
+            'connectionType': self.connection_type or '',
+            'accessibilityEnabled': self.accessibility_enabled,
             'remoteActive': bool(self.remote_active),
             'remoteScreenW': self.remote_screen_w, 'remoteScreenH': self.remote_screen_h,
             'remoteFrameAt': self.remote_frame_at,

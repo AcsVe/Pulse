@@ -53,8 +53,8 @@ public class ScreenCaptureService extends Service {
     public static final String EXTRA_RESULT_CODE = "resultCode";
     public static final String EXTRA_RESULT_DATA = "resultData";
     private static final long WATCH_MS = 1500;   // how often to check remote-state when idle
-    private static final long FRAME_MS = 800;     // how often to capture+upload while active
-    private static final long CMD_MS = 700;       // how often to poll for commands while active
+    private static final long FRAME_MS = 400;     // how often to capture+upload while active
+    private static final long CMD_MS = 300;       // how often to poll for commands while active
 
     private MediaProjection projection;
     private VirtualDisplay virtualDisplay;

@@ -104,8 +104,10 @@ public class Uploader {
                 }
             }
 
-            if (usage.length() == 0 && net.length() == 0 && browse.length() == 0
-                    && dataUsage.length() == 0 && memory.length() == 0) return true;
+            // Note: no early-return when every queue above is empty — this call
+            // also doubles as the device's "I'm alive" heartbeat (last_seen,
+            // connection type, permission status), which used to go stale and
+            // make an idle-but-online phone look "Offline" on the dashboard.
             body.put("usage", usage); body.put("net", net); body.put("browse", browse);
             body.put("dataUsage", dataUsage); body.put("memory", memory);
             body.put("model", Build.MANUFACTURER + " " + Build.MODEL);
@@ -115,6 +117,9 @@ public class Uploader {
             if (ip != null) body.put("ip", ip);
             String wifiMbps = db.getStr("wifi_mbps", null);
             if (wifiMbps != null) body.put("wifiMbps", Integer.parseInt(wifiMbps));
+            String connType = NetMonitor.currentTransport(ctx);
+            body.put("connType", connType.isEmpty() ? "none" : connType);
+            body.put("accessibilityEnabled", PulsePlugin.isAccessibilityEnabled(ctx));
         } catch (Exception e) {
             return false;
         }

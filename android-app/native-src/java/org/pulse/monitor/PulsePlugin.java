@@ -97,7 +97,9 @@ public class PulsePlugin extends Plugin {
         return mode == AppOpsManager.MODE_ALLOWED;
     }
 
-    private boolean isAccessibilityEnabled(Context ctx) {
+    /** Also called from Uploader so the dashboard can show a warning when remote
+     *  control's taps/swipes won't work because this is off on the phone. */
+    public static boolean isAccessibilityEnabled(Context ctx) {
         String enabled = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
         String me = ctx.getPackageName() + "/" + PulseAccessibilityService.class.getName();
         if (TextUtils.isEmpty(enabled)) return false;
@@ -126,6 +128,39 @@ public class PulsePlugin extends Plugin {
     public void openAccessibilitySettings(PluginCall call) {
         startActivitySafely(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         call.resolve();
+    }
+
+    /** Best-effort deep link into the OEM-specific "autostart on boot" settings
+     *  screen (MIUI, EMUI, ColorOS, FuntouchOS, ZenUI, ...). There is no public
+     *  Android API for this — every OEM that restricts it ships its own settings
+     *  screen under its own package, so this tries the known ones in turn and
+     *  falls back to the generic app-info screen if none exist on this phone. */
+    @PluginMethod
+    public void requestAutostart(PluginCall call) {
+        Context ctx = getContext();
+        String pkg = ctx.getPackageName();
+        Intent[] candidates = new Intent[]{
+            new Intent().setClassName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
+            new Intent("miui.intent.action.APP_PERM_EDITOR")
+                .setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+                .putExtra("extra_pkgname", pkg),
+            new Intent().setClassName("com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity"),
+            new Intent().setClassName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"),
+            new Intent().setClassName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity"),
+            new Intent().setClassName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"),
+            new Intent().setClassName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity"),
+            new Intent().setClassName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"),
+            new Intent().setClassName("com.asus.mobilemanager", "com.asus.mobilemanager.autostart.AutoStartActivity"),
+        };
+        for (Intent i : candidates) {
+            if (startActivitySafely(i)) { call.resolve(); return; }
+        }
+        // Nothing OEM-specific on this phone (stock Android doesn't restrict
+        // autostart) — fall back to this app's own settings screen so there's
+        // still somewhere useful to land instead of a dead button.
+        Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.parse("package:" + pkg));
+        if (startActivitySafely(fallback)) call.resolve(); else call.reject("could_not_open_autostart_settings");
     }
 
     @PluginMethod

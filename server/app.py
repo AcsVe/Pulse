@@ -9,11 +9,26 @@ from urllib.parse import urlparse
 
 from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import inspect, text
 
 import stats
 import mailer
 from models import (db, now_ms, sha256, Device, UsageSession, NetEvent, BrowseEvent,
                     DataUsage, DeviceSample, AppLabelOverride, EmailSettings, ReportSchedule, RemoteCommand, User)
+
+
+def _migrate_columns(db, table, columns):
+    """Adds any of `columns` ({name: SQL type}) to `table` that aren't there yet.
+    Safe to call on every startup — a no-op once the columns exist. Works on
+    both SQLite and Postgres, the two engines this app is deployed on."""
+    inspector = inspect(db.engine)
+    if table not in inspector.get_table_names():
+        return  # create_all() will make it fresh with every column already defined
+    existing = {c['name'] for c in inspector.get_columns(table)}
+    for name, coltype in columns.items():
+        if name not in existing:
+            db.session.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {coltype}'))
+    db.session.commit()
 
 
 def create_app(test_config=None):
@@ -39,6 +54,13 @@ def create_app(test_config=None):
     os.makedirs(app.config['SCREENS_DIR'], exist_ok=True)
     with app.app_context():
         db.create_all()
+        # db.create_all() only creates missing tables, not missing columns on a
+        # table that already existed from an earlier version of this app (e.g.
+        # an already-deployed devices.db) — add any new columns by hand.
+        _migrate_columns(db, 'devices', {
+            'connection_type': 'VARCHAR(20)',
+            'accessibility_enabled': 'BOOLEAN',
+        })
         if not db.session.get(EmailSettings, 1):
             db.session.add(EmailSettings(id=1))
             db.session.commit()
@@ -356,6 +378,10 @@ def create_app(test_config=None):
             dev.ip_address = str(data['ip'])[:64]
         if data.get('wifiMbps') is not None:
             dev.wifi_mbps = _int(data['wifiMbps'])
+        if data.get('connType') is not None:
+            dev.connection_type = str(data['connType'])[:20]
+        if data.get('accessibilityEnabled') is not None:
+            dev.accessibility_enabled = bool(data['accessibilityEnabled'])
         for k in ('model', 'os', 'app'):
             if data.get(k):
                 setattr(dev, {'model': 'model', 'os': 'os_version', 'app': 'app_version'}[k], str(data[k])[:120])

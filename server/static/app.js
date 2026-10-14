@@ -42,6 +42,9 @@ const T = {
     hourly:'كل ساعة', unrestricted:'إرسال كل البيانات المتاحة (بلا تقييد بالأقسام)',
     perDevice:'إرسال تقرير إضافي منفصل لكل جهاز', wifiSpeed:'سرعة واي فاي', pollIntervalS:'فترة التحديث (ثوانٍ)',
     pollIntervalHint:'كل كم ثانية يرسل الهاتف بياناته — رقم أصغر = أقرب للفوري لكنه يستهلك بطارية أكثر',
+    connectionType:'نوع الاتصال', connNone:'بلا اتصال', connUnknown:'غير معروف',
+    confirmNewCode:'سيتم إنشاء رمز ربط جديد، وسيحتاج هذا الهاتف لإعادة الربط به. استمرار؟',
+    accessibilityWarn:'⚠ خدمة إمكانية الوصول غير مفعّلة على هذا الهاتف — النقر والسحب لن يعملا. فعّلها من إعدادات الهاتف داخل تطبيق Pulse.',
     mailTransport:'إعدادات الإرسال', provider:'طريقة الإرسال', providerSmtp:'SMTP', providerGraph:'Microsoft Graph',
     graphTenantId:'معرّف المستأجر (Tenant ID)', graphClientId:'معرّف التطبيق (Client ID)',
     graphClientSecret:'سر التطبيق (Client Secret)', graphClientSecretHint:'اتركه فارغاً للإبقاء على القيمة الحالية',
@@ -108,6 +111,9 @@ const T = {
     hourly:'Hourly', unrestricted:'Send all available data (ignore section picker)',
     perDevice:'Also send a separate report per device', wifiSpeed:'Wi-Fi speed', pollIntervalS:'Update interval (seconds)',
     pollIntervalHint:'How often the phone sends its data — lower = closer to real-time but uses more battery',
+    connectionType:'Connection type', connNone:'No connection', connUnknown:'Unknown',
+    confirmNewCode:'This creates a new enrollment code, and the phone will need to re-enroll with it. Continue?',
+    accessibilityWarn:'⚠ Accessibility service is not enabled on this phone — taps and swipes will not work. Enable it from the phone\'s settings inside the Pulse app.',
     remote:'Remote control', remoteStart:'Start remote control', remoteStop:'Stop', remoteWaiting:'Waiting for the first frame from the phone…',
     remoteBack:'Back', remoteHome:'Home', remoteRecents:'Recents', remoteSendText:'Send text',
     remoteTextPh:'Type text to send to the focused field on the phone', remoteHint:'Click the image to tap on the phone. Drag to swipe.',
@@ -206,7 +212,7 @@ function barChart(cur, prev, { h = 190, unit = 'ms' } = {}) {
   for (let i = 0; i <= 4; i++) {
     const y = padT + innerH - innerH * i / 4, val = max * i / 4;
     g += `<line x1="${padL}" x2="${W-6}" y1="${y}" y2="${y}" stroke="#d6e1e9" stroke-dasharray="3 4" opacity=".7"/>`;
-    g += `<text x="${rtl ? W - 0 : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="10">${esc(fmtVal(val, unit))}</text>`;
+    g += `<text x="${rtl ? W - 0 : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="13">${esc(fmtVal(val, unit))}</text>`;
   }
   cur.forEach((d, i) => {
     const bh = innerH * d.v / max, x = X(i);
@@ -215,7 +221,7 @@ function barChart(cur, prev, { h = 190, unit = 'ms' } = {}) {
       g += `<rect x="${x - bw/2 - 3}" y="${padT + innerH - ph}" width="${bw}" height="${ph}" rx="2" fill="#aebfcc" opacity=".8"><title>${esc(prev[i].label)} — ${esc(fmtVal(prev[i].v, unit))}</title></rect>`;
     }
     g += `<rect x="${x - bw/2 + (prev ? 3 : 0)}" y="${padT + innerH - bh}" width="${bw}" height="${Math.max(0, bh)}" rx="2" fill="var(--teal)"><title>${esc(d.label)} — ${esc(fmtVal(d.v, unit))}</title></rect>`;
-    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${x}" y="${h - 6}" text-anchor="middle" font-size="10">${esc(d.short)}</text>`;
+    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${x}" y="${h - 6}" text-anchor="middle" font-size="13">${esc(d.short)}</text>`;
   });
   return `<svg viewBox="0 0 ${W} ${h}" width="100%" role="img">${g}</svg>`;
 }
@@ -231,7 +237,7 @@ function stackedChart(days) {
   for (let i = 0; i <= 4; i++) {
     const y = padT + innerH - innerH * i / 4;
     g += `<line x1="${padL}" x2="${W-6}" y1="${y}" y2="${y}" stroke="#d6e1e9" stroke-dasharray="3 4" opacity=".7"/>`;
-    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="10">${Math.round(max * i / 4)}</text>`;
+    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="13">${Math.round(max * i / 4)}</text>`;
   }
   rows.forEach((r, i) => {
     let y = padT + innerH;
@@ -239,7 +245,7 @@ function stackedChart(days) {
       const bh = innerH * p.v / max; y -= bh;
       if (bh > 0) g += `<rect x="${X(i) - bw/2}" y="${y}" width="${bw}" height="${bh}" fill="${KIND_COLOR[p.k]}"><title>${esc(r.label)} — ${esc(t(p.k))}: ${Math.round(p.v)}${t('m')}</title></rect>`;
     });
-    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${X(i)}" y="${h - 6}" text-anchor="middle" font-size="10">${esc(r.short)}</text>`;
+    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${X(i)}" y="${h - 6}" text-anchor="middle" font-size="13">${esc(r.short)}</text>`;
   });
   const legend = ['no_internet','failed','disconnected'].map(k => `<span><i style="background:${KIND_COLOR[k]}"></i>${esc(t(k))}</span>`).join('');
   return `<svg viewBox="0 0 ${W} ${h}" width="100%" role="img">${g}</svg><div class="legend">${legend}</div>`;
@@ -530,11 +536,22 @@ async function renderNet() {
     { k: 'device', label: t('device'), w: 130 },
   ] });
 }
+function showCode(d) {
+  const box = $('#codeBox');
+  if (!box) return;
+  box.innerHTML = `<div class="codebox"><div><div>${t('enrollCode')}</div><div class="code">${esc(d.enrollCode)}</div></div><div>${t('enrollHint')}<br><b>${esc(d.name)}</b></div></div>`;
+}
 async function renderDevices() {
   const list = await api('/api/devices');
   S.allDevices = list; renderDevPop();
   const now = Date.now();
-  const rows = list.map(d => ({ ...d, status: !d.enrolled ? 'pending' : (d.lastSeen && now - d.lastSeen < 15 * 60000 ? 'online' : 'offline') }));
+  // "Offline" used to always use a flat 15-minute window, which falsely flagged
+  // a device as offline if its own (admin-configurable) update interval was
+  // longer than that — the window now scales with the device's own interval.
+  const rows = list.map(d => {
+    const win = Math.max(15 * 60000, (d.pollIntervalS || 60) * 1000 * 3);
+    return { ...d, status: !d.enrolled ? 'pending' : (d.lastSeen && now - d.lastSeen < win ? 'online' : 'offline') };
+  });
   const code = rows.find(r => r.enrollCode && r._show);
   $('#main').innerHTML = `
     ${canWrite() ? `<div class="card"><h3>${t('addDevice')}</h3>
@@ -542,7 +559,6 @@ async function renderDevices() {
       <div id="codeBox"></div>
       <div class="apk"><a href="${esc(K.apk)}">${t('downloadApk')}</a></div></div>` : ''}
     <div class="card" id="tbl"></div>`;
-  const showCode = d => { $('#codeBox').innerHTML = `<div class="codebox"><div><div>${t('enrollCode')}</div><div class="code">${esc(d.enrollCode)}</div></div><div>${t('enrollHint')}<br><b>${esc(d.name)}</b></div></div>`; };
   if (canWrite()) {
     $('#addBtn').onclick = async () => {
       const name = $('#newName').value.trim(); if (!name) return;
@@ -558,6 +574,12 @@ async function renderDevices() {
     { k: 'status', label: t('status'), w: 150, html: x => `<span class="dot" style="background:${x.status === 'online' ? 'var(--good)' : x.status === 'pending' ? 'var(--warn)' : 'var(--grey)'}"></span>${esc(t(x.status))}`, text: x => t(x.status) },
     { k: 'lastSeen', label: t('lastSeen'), fmt: fmtTs, w: 150 },
     { k: 'ipAddress', label: t('ip'), w: 130, fmt: v => v || '—' },
+    { k: 'connectionType', label: t('connectionType'), w: 130, html: x => {
+        const c = x.connectionType;
+        const lbl = !x.enrolled ? '—' : c === 'wifi' ? t('wifi') : c === 'cellular' ? t('cellular')
+          : c === 'ethernet' ? 'Ethernet' : c === 'none' ? t('connNone') : t('connUnknown');
+        return esc(lbl);
+      }, text: x => x.connectionType },
     { k: 'wifiMbps', label: t('wifiSpeed'), w: 110, num: true, fmt: v => v ? `${v} Mbps` : '—' },
     { k: 'pollIntervalS', label: t('pollIntervalS'), w: 130,
       html: x => canWrite()
@@ -567,7 +589,11 @@ async function renderDevices() {
     { k: 'model', label: t('model'), w: 150 },
     { k: 'osVersion', label: t('os'), w: 90 },
     { k: 'enrolledAt', label: t('enrolledAt'), fmt: fmtTs, w: 150 },
-    { k: 'enrollCode', label: t('enrollCode'), w: 130, html: x => x.enrollCode ? `<b dir="ltr">${esc(x.enrollCode)}</b>` : '—', text: x => x.enrollCode },
+    { k: 'enrollCode', label: t('enrollCode'), w: 150, html: x => {
+        const code = x.enrollCode ? `<b dir="ltr">${esc(x.enrollCode)}</b>` : (x.enrolled ? '—' : '—');
+        const btn = canWrite() ? `<button class="newcodebtn" data-id="${x.id}" title="${esc(t('newCode'))}">↻ ${esc(t('newCode'))}</button>` : '';
+        return `${code}${btn}`;
+      }, text: x => x.enrollCode },
     { k: 'remote', label: t('remote'), w: 130, html: x => (x.enrolled && canWrite())
         ? `<button class="tbtn remotebtn" data-id="${x.id}" data-name="${esc(x.name)}">📱 ${esc(t('remote'))}</button>`
         : `<span class="muted">—</span>`, text: () => '' },
@@ -575,9 +601,13 @@ async function renderDevices() {
   wireDeviceRename(tbl, renderDevices);
   wirePollEdit(tbl, renderDevices);
   tbl.addEventListener('click', e => {
-    const b = e.target.closest('.remotebtn[data-id]');
-    if (!b) return;
-    openRemotePanel(b.dataset.id, b.dataset.name);
+    const rb = e.target.closest('.remotebtn[data-id]');
+    if (rb) { openRemotePanel(rb.dataset.id, rb.dataset.name); return; }
+    const nb = e.target.closest('.newcodebtn[data-id]');
+    if (nb) {
+      if (!confirm(t('confirmNewCode'))) return;
+      jpost(`/api/devices/${nb.dataset.id}/code`, {}, 'POST').then(async d => { await renderDevices(); showCode(d); });
+    }
   });
 }
 
@@ -825,15 +855,19 @@ async function renderUsers() {
 const RC = { id: null, timer: null, w: 0, h: 0, drag: null };
 function openRemotePanel(id, name) {
   RC.id = id; RC.w = 0; RC.h = 0; RC.drag = null;
+  const dev = (S.allDevices || []).find(x => String(x.id) === String(id));
   const modal = $('#remoteModal');
   modal.innerHTML = `
     <div class="remote-box">
       <div class="remote-head"><h3>${esc(t('remote'))} — ${esc(name)}</h3><button class="tbtn" id="rcClose">✕</button></div>
+      ${dev && dev.accessibilityEnabled === false ? `<div class="remote-warn">${esc(t('accessibilityWarn'))}</div>` : ''}
       <div class="remote-screen-wrap">
         <div class="remote-wait" id="rcWait">${esc(t('remoteWaiting'))}</div>
         <img id="rcImg" hidden>
       </div>
       <div class="remote-controls">
+        <button class="tbtn" id="rcZoomOut">－</button>
+        <button class="tbtn" id="rcZoomIn">＋</button>
         <button class="tbtn" id="rcBack">⟲ ${esc(t('remoteBack'))}</button>
         <button class="tbtn" id="rcHome">⌂ ${esc(t('remoteHome'))}</button>
         <button class="tbtn" id="rcRecents">▭ ${esc(t('remoteRecents'))}</button>
@@ -845,6 +879,10 @@ function openRemotePanel(id, name) {
       <div class="remote-hint">${esc(t('remoteHint'))}</div>
     </div>`;
   modal.hidden = false;
+  RC.zoom = 1;
+  const img0 = $('#rcImg');
+  $('#rcZoomIn').onclick = () => { RC.zoom = Math.min(2.5, RC.zoom + 0.25); img0.style.transform = `scale(${RC.zoom})`; };
+  $('#rcZoomOut').onclick = () => { RC.zoom = Math.max(1, RC.zoom - 0.25); img0.style.transform = `scale(${RC.zoom})`; };
   $('#rcClose').onclick = closeRemotePanel;
   $('#rcBack').onclick = () => remoteCmd({ action: 'back' });
   $('#rcHome').onclick = () => remoteCmd({ action: 'home' });
@@ -878,7 +916,7 @@ function openRemotePanel(id, name) {
   };
   jpost(`/api/devices/${id}/remote/start`, {}, 'POST');
   tickRemoteFrame();
-  RC.timer = setInterval(tickRemoteFrame, 1000);
+  RC.timer = setInterval(tickRemoteFrame, 500);
 }
 async function tickRemoteFrame() {
   if (!RC.id) return;
