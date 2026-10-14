@@ -19,8 +19,8 @@ button,input,select{font:inherit;color:inherit}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{border:1.5px solid rgba(255,255,255,.25);background:transparent;color:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:.85rem;font-weight:600}
 .chip.on{background:var(--teal);border-color:var(--teal)}
-.range{display:flex;align-items:center;gap:6px}
-.range input{padding:4px 8px;border-radius:8px;border:0}
+.range{display:flex;align-items:center;gap:6px;color:#fff}
+.range input{padding:4px 8px;border-radius:8px;border:0;background:#fff;color:var(--text)}
 .btn{background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:600;text-decoration:none;font-size:.85rem}
 .btn:hover{background:rgba(255,255,255,.22)}
 .pop{position:relative}
