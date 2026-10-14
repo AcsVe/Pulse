@@ -6,6 +6,10 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px}
+/* Without this, Chrome renders native <input type=date/time> placeholder
+   text and spinner icons using the OS's dark-mode palette whenever the
+   device is in dark mode — white-on-white against our always-light inputs. */
+input[type=date],input[type=time]{color-scheme:light}
 body{background:var(--bg);color:var(--text);font-family:'Tajawal',system-ui,-apple-system,'Segoe UI',sans-serif;min-height:100vh}
 button,input,select{font:inherit;color:inherit}
 .top{background:var(--navy);color:#fff;display:flex;align-items:center;gap:14px;padding:10px 18px;flex-wrap:wrap;position:sticky;top:0;z-index:30}

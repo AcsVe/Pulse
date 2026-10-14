@@ -132,8 +132,7 @@ public class PulsePlugin extends Plugin {
     public void requestBattery(PluginCall call) {
         Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
         i.setData(Uri.parse("package:" + getContext().getPackageName()));
-        startActivitySafely(i);
-        call.resolve();
+        if (startActivitySafely(i)) call.resolve(); else call.reject("could_not_open_battery_settings");
     }
 
     @PluginMethod
@@ -245,8 +244,7 @@ public class PulsePlugin extends Plugin {
         Intent i = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
         i.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, PulseDeviceAdminReceiver.componentName(getContext()));
         i.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, getContext().getString(R.string.pulse_device_admin_desc));
-        startActivitySafely(i);
-        call.resolve();
+        if (startActivitySafely(i)) call.resolve(); else call.reject("could_not_open_device_admin_settings");
     }
 
     // ── remote screen view + control ────────────────────────────────────
@@ -282,8 +280,12 @@ public class PulsePlugin extends Plugin {
         call.resolve();
     }
 
-    private void startActivitySafely(Intent intent) {
+    /** @return true if the activity actually launched. Several callers used to
+     * swallow this silently (missing manifest permission, no activity able to
+     * handle the intent, OEM restrictions, ...) which made their buttons look
+     * like they "did nothing" when tapped — now surfaced via call.reject(). */
+    private boolean startActivitySafely(Intent intent) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        try { getContext().startActivity(intent); } catch (Exception ignored) { }
+        try { getContext().startActivity(intent); return true; } catch (Exception e) { return false; }
     }
 }

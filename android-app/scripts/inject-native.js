@@ -78,6 +78,10 @@ const permissions = [
   'android.permission.POST_NOTIFICATIONS',
   'android.permission.PACKAGE_USAGE_STATS',
   'android.permission.BIND_VPN_SERVICE',
+  // Without this, Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS throws
+  // a SecurityException that PulsePlugin used to swallow silently — the
+  // "Ignore battery optimization" button would just do nothing when tapped.
+  'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
 ];
 for (const p of permissions) {
   const tag = `<uses-permission android:name="${p}" />`;
