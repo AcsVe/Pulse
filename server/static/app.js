@@ -173,7 +173,7 @@ function computeRange() {
   if (p === 'yesterday') return [today - DAY, today];
   if (p === 'd30') return [today - 29 * DAY, today + DAY];
   if (p === 'month') return [new Date(now.getFullYear(), now.getMonth(), 1).getTime(), today + DAY];
-  if (p === 'custom' && S.from && S.to) return [S.from, S.to + DAY];
+  if (p === 'custom' && S.from && S.to) return [S.from, S.to];
   return [today - 6 * DAY, today + DAY];
 }
 function qs(extra) {
@@ -600,7 +600,7 @@ function scheduleFormHtml(sch, devices) {
       <label id="rsWeekdayWrap" style="${s.frequency==='weekly'?'':'display:none'}">${t('weekday')}<select id="rsWeekday">
         ${WEEKDAY_KEYS.map((k, i) => `<option value="${i}" ${s.weekday===i?'selected':''}>${t(k)}</option>`).join('')}
       </select></label>
-      <label id="rsDateWrap" style="${s.frequency==='once'?'':'display:none'}">${t('onceDate')}<input id="rsDate" type="date" value="${esc(s.onceDate)}"></label>
+      <label id="rsDateWrap" style="${s.frequency==='once'?'':'display:none'}">${t('onceDate')}<input id="rsDate" type="date" lang="en-GB" value="${esc(s.onceDate)}"></label>
     </div>
     <label class="chk" style="margin-top:10px"><input type="checkbox" id="rsEnabled" ${s.enabled ? 'checked' : ''}> ${t('enabledQ')}</label>
     <label class="chk"><input type="checkbox" id="rsUnrestricted" ${s.unrestricted ? 'checked' : ''}> ${t('unrestricted')}</label>
@@ -965,7 +965,9 @@ async function init() {
   $('#langBtn').onclick = () => { setLang(lang === 'ar' ? 'en' : 'ar'); paintStatic(); load(); };
   $('#refreshBtn').onclick = load;
   const fd = $('#fromDate'), td = $('#toDate');
-  const onRange = () => { if (fd.value && td.value) { S.from = dayStart(new Date(fd.value + 'T00:00')); S.to = dayStart(new Date(td.value + 'T00:00')); load(); } };
+  // datetime-local values ("YYYY-MM-DDTHH:mm") parse directly — the user
+  // now picks an exact start/end moment, not just whole days.
+  const onRange = () => { if (fd.value && td.value) { S.from = new Date(fd.value).getTime(); S.to = new Date(td.value).getTime(); load(); } };
   fd.onchange = td.onchange = onRange;
   paintStatic();
   if (K.kiosk) {
