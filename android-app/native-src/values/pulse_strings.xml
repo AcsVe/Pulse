@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="pulse_access_desc">يستخدمه تطبيق Pulse لقراءة شريط عنوان المتصفح وتسجيل المواقع التي تُفتح على هذا الجهاز، ضمن نطاق المراقبة الذي وافقت عليه.</string>
-    <string name="pulse_device_admin_desc">يمنع إلغاء تثبيت Pulse مباشرة من الإعدادات دون إلغاء تفعيل هذه الحماية أولاً.</string>
-</resources>
