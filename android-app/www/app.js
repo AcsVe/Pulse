@@ -13,6 +13,7 @@ const T = {
     pUsage: 'إحصاءات الاستخدام', pUsageD: 'لرصد التطبيقات المستخدمة ومدتها', pAccess: 'خدمة الوصول', pAccessD: 'لقراءة شريط عنوان المتصفح',
     pBattery: 'تجاهل تحسين البطارية', pBatteryD: 'لإبقاء الخدمة تعمل في الخلفية', pNotif: 'الإشعارات', pNotifD: 'لعرض إشعار تشغيل الخدمة',
     pVpn: 'مراقبة DNS', pVpnD: 'لتسجيل أسماء المواقع عبر كل التطبيقات', grant: 'منح', granted: 'ممنوح',
+    permError: 'تعذّر فتح هذا الإعداد على هذا الهاتف. جرّب فتحه يدويًا من إعدادات أندرويد.',
     pAdmin: 'حماية إلغاء التثبيت', pAdminD: 'يمنع حذف التطبيق مباشرة دون تعطيل هذه الحماية أولاً من الإعدادات',
     invalidCode: 'الرمز غير صحيح أو منتهي، أو تعذر الاتصال بالخادم', never: 'لم تحدث بعد', neverSynced: 'لم تتم بعد',
     stopConfirm: 'سيتم إيقاف جمع البيانات على هذا الجهاز. هل تريد المتابعة؟', justNow: 'الآن',
@@ -37,6 +38,7 @@ const T = {
     pUsage: 'Usage access', pUsageD: 'To track which apps are used and for how long', pAccess: 'Accessibility service', pAccessD: 'To read the browser address bar',
     pBattery: 'Ignore battery optimization', pBatteryD: 'To keep the background service running', pNotif: 'Notifications', pNotifD: 'To show the running-service notice',
     pVpn: 'DNS monitoring', pVpnD: 'To log visited domains across all apps', grant: 'Grant', granted: 'Granted',
+    permError: "Couldn't open this setting on this phone. Try opening it manually from Android settings.",
     pAdmin: 'Uninstall protection', pAdminD: 'Blocks removing the app until this protection is turned off from Settings first',
     invalidCode: 'The code is wrong or expired, or the server could not be reached', never: 'Not yet', neverSynced: 'Not yet',
     stopConfirm: 'This stops data collection on this device. Continue?', justNow: 'Just now',
@@ -87,7 +89,10 @@ async function refreshPerms() {
     row.className = 'perm' + (on ? ' on' : '');
     row.innerHTML = `<div><div class="pt"><span class="dot"></span>${t(info.t)}</div><div class="pd">${t(info.d)}</div></div>
       <button class="pbtn">${on ? t('granted') : t('grant')}</button>`;
-    row.querySelector('button').onclick = async () => { await p[info.action](); setTimeout(refreshPerms, 600); };
+    row.querySelector('button').onclick = async () => {
+      try { await p[info.action](); } catch (e) { alert(t('permError')); return; }
+      setTimeout(refreshPerms, 600);
+    };
     list.append(row);
   });
   const allOn = PERMS.filter(info => !info.optional).every(info => st[info.key]);
