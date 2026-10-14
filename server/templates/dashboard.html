@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulse</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="{{ 'kiosk' if kiosk else '' }}">
+<header class="top">
+  <div class="brand">Pul<span>se</span></div>
+  <div class="controls" id="controls">
+    <div class="chips" id="periodChips"></div>
+    <label class="range" id="customRange" hidden>
+      <input type="date" id="fromDate"> <span>→</span> <input type="date" id="toDate">
+    </label>
+    <details class="pop" id="devPop"><summary id="devSummary"></summary><div class="popbody" id="devList"></div></details>
+    <button class="btn" id="langBtn"></button>
+    <button class="btn" id="refreshBtn"></button>
+    {% if not kiosk %}<a class="btn" href="/logout" id="logoutBtn"></a>{% endif %}
+  </div>
+  <div class="kioskinfo" id="kioskInfo"></div>
+</header>
+{% if not kiosk %}<nav class="tabs" id="tabs"></nav>{% endif %}
+<main id="main"></main>
+<div class="toast" id="toast"></div>
+<div class="modal-wrap" id="remoteModal" hidden></div>
+<script>
+  window.PULSE = { kiosk: {{ 'true' if kiosk else 'false' }}, key: {{ screen_key|tojson }}, apk: {{ apk_url|tojson }} };
+</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
