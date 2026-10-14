@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pulse</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">Pul<span>se</span></div>
+  <button id="langBtn" class="pill">EN</button>
+</header>
+
+<main id="app">
+
+  <!-- PIN lock — shown on every app open once a PIN is set. -->
+  <section id="lock" class="card hidden">
+    <h1 data-t="lockTitle">أدخل رمز الدخول</h1>
+    <input id="lockPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off">
+    <div id="lockErr" class="err hidden" data-t="wrongPin">رمز غير صحيح</div>
+    <button id="lockBtn" class="btn primary" data-t="unlock">دخول</button>
+  </section>
+
+  <!-- PIN setup — shown once, right after consent. -->
+  <section id="pinSetup" class="card hidden">
+    <h1 data-t="pinSetupTitle">إنشاء رمز دخول</h1>
+    <p class="muted" data-t="pinSetupHint">رمز من ٤ إلى ٦ أرقام، يُطلب عند فتح التطبيق وعند إيقاف المراقبة</p>
+    <label data-t="newPin">الرمز</label>
+    <input id="newPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off">
+    <label data-t="confirmPin">تأكيد الرمز</label>
+    <input id="confirmPinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off">
+    <div id="pinSetupErr" class="err hidden"></div>
+    <button id="pinSetupBtn" class="btn primary" data-t="savePin">حفظ</button>
+  </section>
+
+  <!-- Consent / disclosure screen — shown once before anything else works. -->
+  <section id="consent" class="card">
+    <h1 data-t="consentTitle">هذا الجهاز يخضع للمراقبة</h1>
+    <p data-t="consentBody">يقوم Pulse بتسجيل التطبيقات المستخدمة، عناوين المواقع التي تُفتح في المتصفح، وفترات انقطاع الشبكة على هذا الجهاز، ويرسل هذه البيانات إلى خادم تديره جهة مسؤولة عنك. يبقى أيقونة التطبيق وإشعار دائم ظاهرين طوال عمل الخدمة.</p>
+    <label class="chk"><input type="checkbox" id="consentChk"> <span data-t="consentAgree">أوافق على تشغيل المراقبة على هذا الجهاز</span></label>
+    <button id="consentNext" class="btn primary" disabled data-t="continue">متابعة</button>
+  </section>
+
+  <!-- Server + enrollment -->
+  <section id="enroll" class="card hidden">
+    <h1 data-t="connectTitle">الاتصال بالخادم</h1>
+    <label data-t="serverUrl">رابط الخادم</label>
+    <input id="serverUrl" type="url" placeholder="https://pulse.example.com" autocapitalize="off" autocorrect="off">
+    <label data-t="enrollCode">رمز الربط</label>
+    <input id="enrollCode" type="text" placeholder="XXXXXXXX" autocapitalize="characters" autocorrect="off" maxlength="12">
+    <div id="enrollErr" class="err hidden"></div>
+    <button id="enrollBtn" class="btn primary" data-t="connect">اتصال</button>
+  </section>
+
+  <!-- Permission checklist -->
+  <section id="perms" class="card hidden">
+    <h1 data-t="permsTitle">الأذونات المطلوبة</h1>
+    <p class="muted" data-t="permsHint">امنح كل إذن لتعمل كل الميزات بشكل صحيح</p>
+    <div class="permlist" id="permList"></div>
+    <button id="startBtn" class="btn primary" data-t="start" disabled>بدء المراقبة</button>
+  </section>
+
+  <!-- Running status -->
+  <section id="status" class="card hidden">
+    <h1 data-t="runningTitle">المراقبة تعمل</h1>
+    <div class="statusbox">
+      <div class="row"><span data-t="device">الجهاز</span><b id="stDevice">—</b></div>
+      <div class="row"><span data-t="server">الخادم</span><b id="stServer" dir="ltr">—</b></div>
+      <div class="row"><span data-t="lastSync">آخر مزامنة</span><b id="stSync">—</b></div>
+      <div class="row"><span data-t="queued">بانتظار الإرسال</span><b id="stQueue">—</b></div>
+    </div>
+    <button id="syncNowBtn" class="btn" data-t="syncNow">مزامنة الآن</button>
+    <button id="permsBtn" class="btn" data-t="checkPerms">إعادة فحص الأذونات</button>
+    <button id="iconBtn" class="btn" data-t="hideIcon">إخفاء الأيقونة</button>
+    <p class="muted" id="iconHint" data-t="iconHint">يبقى إشعار التشغيل ظاهراً دائماً (يفرضه نظام أندرويد) — اضغط عليه في أي وقت لإعادة إظهار الأيقونة وفتح التطبيق.</p>
+    <button id="remoteBtn" class="btn" data-t="enableRemote">تفعيل التحكم عن بعد</button>
+    <p class="muted" data-t="remoteHint">يتطلب موافقتك هنا على الجهاز مرة واحدة (مطلب أمني من أندرويد لا يمكن تجاوزه). تُفقد الموافقة بعد إعادة تشغيل الهاتف أو إيقافه القسري وتحتاج تفعيلاً جديداً.</p>
+    <button id="stopBtn" class="btn danger" data-t="stop">إيقاف المراقبة</button>
+  </section>
+
+</main>
+<script src="app.js"></script>
+</body>
+</html>
