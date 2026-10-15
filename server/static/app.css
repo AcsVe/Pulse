@@ -86,6 +86,7 @@ td.fz.edge,th.fz.edge{box-shadow:inset -1px 0 0 var(--line),4px 0 6px -4px rgba(
 tbody tr:hover td{background:#f5fafc} tbody tr.sel td{background:#e6f6f4}
 td.num,th.num{text-align:end;font-variant-numeric:tabular-nums}
 td.wrap{white-space:normal;min-width:260px;max-width:480px;word-break:break-all}
+table a{color:var(--teal-d);text-decoration:none} table a:hover{text-decoration:underline}
 .badge{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.76rem;font-weight:800;color:#fff}
 .empty{padding:30px;text-align:center;color:var(--muted)}
 .codebox{background:#0f2a43;color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}

@@ -60,6 +60,7 @@ def create_app(test_config=None):
         _migrate_columns(db, 'devices', {
             'connection_type': 'VARCHAR(20)',
             'accessibility_enabled': 'BOOLEAN',
+            'wifi_band': 'VARCHAR(10)',
         })
         if not db.session.get(EmailSettings, 1):
             db.session.add(EmailSettings(id=1))
@@ -378,6 +379,8 @@ def create_app(test_config=None):
             dev.ip_address = str(data['ip'])[:64]
         if data.get('wifiMbps') is not None:
             dev.wifi_mbps = _int(data['wifiMbps'])
+        if data.get('wifiBand') is not None:
+            dev.wifi_band = str(data['wifiBand'])[:10]
         if data.get('connType') is not None:
             dev.connection_type = str(data['connType'])[:20]
         if data.get('accessibilityEnabled') is not None:
@@ -674,6 +677,13 @@ def create_app(test_config=None):
         dev = device_from_token()
         if not dev:
             return jsonify({'error': 'unauthorized'}), 401
+        # This (and screen_upload/commands_poll below) is polled on its own
+        # cadence by ScreenCaptureService independently of the regular
+        # CollectorService sync — a device could be live and fully reachable
+        # through remote control while its last_seen (set only by ingest/ping)
+        # goes stale and the dashboard wrongly shows it "Offline".
+        dev.last_seen = now_ms()
+        db.session.commit()
         return jsonify({'active': bool(dev.remote_active), 'pollIntervalS': dev.poll_interval_s or 60})
 
     @app.route('/api/v1/screen', methods=['POST'])
@@ -701,6 +711,7 @@ def create_app(test_config=None):
         with open(_screen_path(dev.id), 'wb') as f:
             f.write(raw)
         dev.remote_frame_at = now_ms()
+        dev.last_seen = dev.remote_frame_at
         if w:
             dev.remote_screen_w = w
         if h:
@@ -768,6 +779,7 @@ def create_app(test_config=None):
         rows = RemoteCommand.query.filter_by(device_id=dev.id, consumed=False).order_by(RemoteCommand.id).limit(20).all()
         for r in rows:
             r.consumed = True
+        dev.last_seen = now_ms()
         db.session.commit()
         return jsonify({'commands': [r.to_dict() for r in rows]})
 

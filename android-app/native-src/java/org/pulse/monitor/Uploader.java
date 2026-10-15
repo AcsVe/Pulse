@@ -117,6 +117,8 @@ public class Uploader {
             if (ip != null) body.put("ip", ip);
             String wifiMbps = db.getStr("wifi_mbps", null);
             if (wifiMbps != null) body.put("wifiMbps", Integer.parseInt(wifiMbps));
+            String wifiBand = db.getStr("wifi_band", null);
+            if (wifiBand != null) body.put("wifiBand", wifiBand);
             String connType = NetMonitor.currentTransport(ctx);
             body.put("connType", connType.isEmpty() ? "none" : connType);
             body.put("accessibilityEnabled", PulsePlugin.isAccessibilityEnabled(ctx));

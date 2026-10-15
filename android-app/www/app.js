@@ -13,9 +13,9 @@ const T = {
     pUsage: 'إحصاءات الاستخدام', pUsageD: 'لرصد التطبيقات المستخدمة ومدتها', pAccess: 'خدمة الوصول', pAccessD: 'لقراءة شريط عنوان المتصفح، وضرورية لعمل النقر والسحب عند التحكم عن بعد',
     pBattery: 'تجاهل تحسين البطارية', pBatteryD: 'لإبقاء الخدمة تعمل في الخلفية', pNotif: 'الإشعارات', pNotifD: 'لعرض إشعار تشغيل الخدمة',
     pAutostart: 'التشغيل التلقائي عند إعادة التشغيل', pAutostartD: 'بعض الهواتف (شاومي، هواوي، أوبو...) توقف هذا تلقائياً — فعّله هنا ليعمل التطبيق دون إعادة فتحه يدوياً',
-    pVpn: 'مراقبة DNS', pVpnD: 'لتسجيل أسماء المواقع عبر كل التطبيقات', grant: 'منح', granted: 'ممنوح',
+    pVpn: 'مراقبة DNS', pVpnD: 'لتسجيل أسماء المواقع عبر كل التطبيقات', grant: 'منح', granted: 'ممنوح', opened: 'تم فتحها ✓',
     permError: 'تعذّر فتح هذا الإعداد على هذا الهاتف. جرّب فتحه يدويًا من إعدادات أندرويد.',
-    pAdmin: 'حماية إلغاء التثبيت', pAdminD: 'يمنع حذف التطبيق مباشرة دون تعطيل هذه الحماية أولاً من الإعدادات',
+    pAdmin: 'حماية إلغاء التثبيت', pAdminD: 'اضغط "منح" ثم اضغط "تفعيل" بالشاشة التي تظهر (فتح الشاشة وحده لا يكفي). للإيقاف لاحقاً: إعدادات الهاتف ← الأمان ← تطبيقات مدير الجهاز ← Pulse ← تعطيل',
     invalidCode: 'الرمز غير صحيح أو منتهي، أو تعذر الاتصال بالخادم', never: 'لم تحدث بعد', neverSynced: 'لم تتم بعد',
     stopConfirm: 'سيتم إيقاف جمع البيانات على هذا الجهاز. هل تريد المتابعة؟', justNow: 'الآن',
     lockTitle: 'أدخل رمز الدخول', unlock: 'دخول', wrongPin: 'رمز غير صحيح',
@@ -39,9 +39,9 @@ const T = {
     pUsage: 'Usage access', pUsageD: 'To track which apps are used and for how long', pAccess: 'Accessibility service', pAccessD: 'To read the browser address bar, and required for tap/swipe to work in remote control',
     pBattery: 'Ignore battery optimization', pBatteryD: 'To keep the background service running', pNotif: 'Notifications', pNotifD: 'To show the running-service notice',
     pAutostart: 'Autostart on reboot', pAutostartD: 'Some phones (Xiaomi, Huawei, Oppo...) block this by default — enable it here so the app keeps running without opening it by hand',
-    pVpn: 'DNS monitoring', pVpnD: 'To log visited domains across all apps', grant: 'Grant', granted: 'Granted',
+    pVpn: 'DNS monitoring', pVpnD: 'To log visited domains across all apps', grant: 'Grant', granted: 'Granted', opened: 'Opened ✓',
     permError: "Couldn't open this setting on this phone. Try opening it manually from Android settings.",
-    pAdmin: 'Uninstall protection', pAdminD: 'Blocks removing the app until this protection is turned off from Settings first',
+    pAdmin: 'Uninstall protection', pAdminD: 'Tap "Grant", then tap "Activate" on the screen that opens (opening the screen alone isn\'t enough). To turn it off later: Phone Settings → Security → Device admin apps → Pulse → Deactivate',
     invalidCode: 'The code is wrong or expired, or the server could not be reached', never: 'Not yet', neverSynced: 'Not yet',
     stopConfirm: 'This stops data collection on this device. Continue?', justNow: 'Just now',
     lockTitle: 'Enter passcode', unlock: 'Unlock', wrongPin: 'Wrong passcode',
@@ -87,13 +87,23 @@ async function refreshPerms() {
   st.deviceAdmin = admin.value;
   const list = $('#permList'); list.innerHTML = '';
   PERMS.forEach(info => {
-    const on = !!st[info.key];
+    // There's no cross-OEM API to confirm autostart actually got enabled (it's
+    // a vendor-specific settings screen, not a system permission Android can
+    // report back on) — so instead of a "Grant" button that visibly never
+    // changes after tapping it, track "did they open the screen at least
+    // once" locally and show that acknowledgment instead of a false status.
+    const noRealStatus = info.key === 'autostart';
+    const opened = noRealStatus && localStorage.getItem('pulse_autostart_opened') === '1';
+    const on = noRealStatus ? opened : !!st[info.key];
     const row = document.createElement('div');
     row.className = 'perm' + (on ? ' on' : '');
     row.innerHTML = `<div><div class="pt"><span class="dot"></span>${t(info.t)}</div><div class="pd">${t(info.d)}</div></div>
-      <button class="pbtn">${on ? t('granted') : t('grant')}</button>`;
+      <button class="pbtn">${on ? (noRealStatus ? t('opened') : t('granted')) : t('grant')}</button>`;
     row.querySelector('button').onclick = async () => {
-      try { await p[info.action](); } catch (e) { alert(t('permError')); return; }
+      try {
+        await p[info.action]();
+        if (noRealStatus) { try { localStorage.setItem('pulse_autostart_opened', '1'); } catch (e) {} }
+      } catch (e) { alert(t('permError')); return; }
       setTimeout(refreshPerms, 600);
     };
     list.append(row);

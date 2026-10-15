@@ -138,8 +138,14 @@ public class NetMonitor {
         try {
             WifiManager wm = (WifiManager) ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             if (wm == null) return;
-            int mbps = wm.getConnectionInfo().getLinkSpeed(); // WifiManager always reports Mbps
+            android.net.wifi.WifiInfo info = wm.getConnectionInfo();
+            int mbps = info.getLinkSpeed(); // WifiManager always reports Mbps
             if (mbps > 0) db.put("wifi_mbps", String.valueOf(mbps));
+            // getFrequency() (MHz) is the only reliable, OEM-independent way to tell a
+            // 2.4GHz association from 5GHz/6GHz — the band isn't exposed anywhere else.
+            int freq = info.getFrequency();
+            String band = freq <= 0 ? null : freq < 3000 ? "2.4GHz" : freq < 5925 ? "5GHz" : "6GHz";
+            if (band != null) db.put("wifi_band", band);
         } catch (Exception ignored) { }
     }
 

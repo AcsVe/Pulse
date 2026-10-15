@@ -5,6 +5,16 @@ const K = window.PULSE;
 const $ = (s, r) => (r || document).querySelector(s);
 const el = (tag, attrs, html) => { const e = document.createElement(tag); if (attrs) Object.assign(e, attrs); if (html != null) e.innerHTML = html; return e; };
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Renders `label` as a clickable link to `url` when one is actually present
+// (and not a bare domain with no scheme and no path, which usually isn't a
+// real navigable address) — falls back to plain escaped text otherwise.
+function linkify(label, url) {
+  const text = esc(label || '');
+  if (!text) return '—';
+  if (!url) return text;
+  const href = /^https?:\/\//i.test(url) ? url : `http://${url}`;
+  return `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${text}</a>`;
+}
 
 // ── i18n (Arabic default; masculine/neutral address forms only) ─────────────
 const T = {
@@ -212,7 +222,7 @@ function barChart(cur, prev, { h = 190, unit = 'ms' } = {}) {
   for (let i = 0; i <= 4; i++) {
     const y = padT + innerH - innerH * i / 4, val = max * i / 4;
     g += `<line x1="${padL}" x2="${W-6}" y1="${y}" y2="${y}" stroke="#d6e1e9" stroke-dasharray="3 4" opacity=".7"/>`;
-    g += `<text x="${rtl ? W - 0 : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="13">${esc(fmtVal(val, unit))}</text>`;
+    g += `<text x="${rtl ? W - 0 : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="15">${esc(fmtVal(val, unit))}</text>`;
   }
   cur.forEach((d, i) => {
     const bh = innerH * d.v / max, x = X(i);
@@ -221,7 +231,7 @@ function barChart(cur, prev, { h = 190, unit = 'ms' } = {}) {
       g += `<rect x="${x - bw/2 - 3}" y="${padT + innerH - ph}" width="${bw}" height="${ph}" rx="2" fill="#aebfcc" opacity=".8"><title>${esc(prev[i].label)} — ${esc(fmtVal(prev[i].v, unit))}</title></rect>`;
     }
     g += `<rect x="${x - bw/2 + (prev ? 3 : 0)}" y="${padT + innerH - bh}" width="${bw}" height="${Math.max(0, bh)}" rx="2" fill="var(--teal)"><title>${esc(d.label)} — ${esc(fmtVal(d.v, unit))}</title></rect>`;
-    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${x}" y="${h - 6}" text-anchor="middle" font-size="13">${esc(d.short)}</text>`;
+    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${x}" y="${h - 6}" text-anchor="middle" font-size="15">${esc(d.short)}</text>`;
   });
   return `<svg viewBox="0 0 ${W} ${h}" width="100%" role="img">${g}</svg>`;
 }
@@ -237,7 +247,7 @@ function stackedChart(days) {
   for (let i = 0; i <= 4; i++) {
     const y = padT + innerH - innerH * i / 4;
     g += `<line x1="${padL}" x2="${W-6}" y1="${y}" y2="${y}" stroke="#d6e1e9" stroke-dasharray="3 4" opacity=".7"/>`;
-    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="13">${Math.round(max * i / 4)}</text>`;
+    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="15">${Math.round(max * i / 4)}</text>`;
   }
   rows.forEach((r, i) => {
     let y = padT + innerH;
@@ -245,7 +255,7 @@ function stackedChart(days) {
       const bh = innerH * p.v / max; y -= bh;
       if (bh > 0) g += `<rect x="${X(i) - bw/2}" y="${y}" width="${bw}" height="${bh}" fill="${KIND_COLOR[p.k]}"><title>${esc(r.label)} — ${esc(t(p.k))}: ${Math.round(p.v)}${t('m')}</title></rect>`;
     });
-    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${X(i)}" y="${h - 6}" text-anchor="middle" font-size="13">${esc(r.short)}</text>`;
+    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${X(i)}" y="${h - 6}" text-anchor="middle" font-size="15">${esc(r.short)}</text>`;
   });
   const legend = ['no_internet','failed','disconnected'].map(k => `<span><i style="background:${KIND_COLOR[k]}"></i>${esc(t(k))}</span>`).join('');
   return `<svg viewBox="0 0 ${W} ${h}" width="100%" role="img">${g}</svg><div class="legend">${legend}</div>`;
@@ -514,10 +524,10 @@ async function renderBrowse() {
   const rows = await api('/api/table/browse?' + qs());
   $('#main').innerHTML = '<div class="card" id="tbl"></div>';
   makeTable($('#tbl'), { id: 'browse', id_: 'id', rows, sortKey: 'ts', deletable: 'browse', reload: renderBrowse, freeze: 1, cols: [
-    { k: 'domain', label: t('domain'), w: 200 },
+    { k: 'domain', label: t('domain'), w: 200, html: x => linkify(x.domain, x.url), text: x => x.domain },
     { k: 'ts', label: t('date'), fmt: fmtTs, w: 150 },
     { k: 'title', label: t('title'), wrap: true, w: 220 },
-    { k: 'url', label: t('url'), wrap: true, w: 300 },
+    { k: 'url', label: t('url'), wrap: true, w: 300, html: x => linkify(x.url, x.url), text: x => x.url },
     { k: 'source', label: t('source'), fmt: v => t(v), w: 110 },
     { k: 'app', label: t('browser'), w: 170 },
     { k: 'device', label: t('device'), w: 130 },
@@ -574,10 +584,12 @@ async function renderDevices() {
     { k: 'status', label: t('status'), w: 150, html: x => `<span class="dot" style="background:${x.status === 'online' ? 'var(--good)' : x.status === 'pending' ? 'var(--warn)' : 'var(--grey)'}"></span>${esc(t(x.status))}`, text: x => t(x.status) },
     { k: 'lastSeen', label: t('lastSeen'), fmt: fmtTs, w: 150 },
     { k: 'ipAddress', label: t('ip'), w: 130, fmt: v => v || '—' },
-    { k: 'connectionType', label: t('connectionType'), w: 130, html: x => {
+    { k: 'connectionType', label: t('connectionType'), w: 150, html: x => {
         const c = x.connectionType;
-        const lbl = !x.enrolled ? '—' : c === 'wifi' ? t('wifi') : c === 'cellular' ? t('cellular')
+        if (!x.enrolled) return '—';
+        let lbl = c === 'wifi' ? t('wifi') : c === 'cellular' ? t('cellular')
           : c === 'ethernet' ? 'Ethernet' : c === 'none' ? t('connNone') : t('connUnknown');
+        if (c === 'wifi' && x.wifiBand) lbl += ` (${x.wifiBand})`;
         return esc(lbl);
       }, text: x => x.connectionType },
     { k: 'wifiMbps', label: t('wifiSpeed'), w: 110, num: true, fmt: v => v ? `${v} Mbps` : '—' },
