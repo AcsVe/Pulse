@@ -150,8 +150,19 @@ body.kiosk svg text{fill:#bcd0de}
 /* Was max-width:420px — far narrower than the modal-wrap had room for on any
    normal screen, so the actual phone-screen view rendered small even though
    plenty of space was available around it. Now scales with the viewport. */
-.remote-box{background:#10222f;border-radius:14px;padding:16px;max-width:min(94vw,860px);width:100%;color:#e9f2f8;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.remote-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+/* The box had no height limit of its own, only .remote-screen-wrap did
+   (max-height:78vh) — fine on its own, but the apps panel (search box +
+   scrollable app list + hint), the zoom/back/home toolbar, the text-send
+   row and its hint all stack up BELOW that, easily pushing the box's total
+   height well past the viewport once the apps panel is opened. Since
+   .modal-wrap just centers the box with no scroll of its own, the extra
+   height came off both ends equally — the header with the only close (✕)
+   button scrolled up out of reach, with no way to get back to it, making
+   the whole dialog look frozen/unclosable. Now the box scrolls internally
+   once it's taller than the viewport, and the header stays pinned to the
+   top of that scroll so the close button is reachable no matter what. */
+.remote-box{background:#10222f;border-radius:14px;padding:16px;max-width:min(94vw,860px);width:100%;max-height:94vh;overflow-y:auto;color:#e9f2f8;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.remote-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;position:sticky;top:-16px;margin-top:-16px;padding-top:16px;background:#10222f;z-index:2}
 .remote-head h3{font-size:1rem;color:#fff}
 .remote-head-actions{display:flex;gap:6px}
 .remote-screen-wrap{position:relative;background:#000;border-radius:10px;overflow:auto;display:flex;align-items:center;justify-content:center;min-height:240px;max-height:78vh}
