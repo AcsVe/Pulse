@@ -66,14 +66,33 @@ public class Uploader {
                 }
             }
             JSONArray net = new JSONArray();
+            // The still-open (current) connectivity segment used to be skipped here
+            // entirely — "don't ship it until it closes" — on the theory that a
+            // provisional row would just need cleaning up later. In practice that
+            // meant a segment that's still open *right now* (which, for a phone
+            // that's simply been connected all day, is every segment) never showed
+            // up anywhere: not in the Network tab, not in the Overview's connection-
+            // type/outage breakdowns — all of it waiting on a close event that, for
+            // an un-interrupted connection, might not happen for days, or (if the
+            // app gets killed/force-stopped before a clean transition) might never
+            // happen at all, silently losing that whole stretch from history. The
+            // server already upserts net rows by (start_ts, kind) — see app.py's
+            // ingest — so re-sending the same open row on every sync is safe: it
+            // just keeps updating the same row (shown as "ongoing" in the Network
+            // tab) until it finally closes. The only thing that has to change is
+            // NOT marking an open row synced here, so it keeps being picked up by
+            // queryPending() and resent each cycle; closeNet() reuses this exact
+            // row id rather than inserting a new one, so once it closes it's synced
+            // normally through the usual (now-closed) path below.
             try (Cursor c = db.queryPending("net_q", new String[]{"id", "kind", "transport", "start_ts", "end_ts", "detail", "open_row"}, BATCH)) {
                 while (c.moveToNext()) {
-                    if (c.getInt(6) == 1) continue; // don't ship still-open rows yet
+                    boolean open = c.getInt(6) == 1;
                     JSONObject o = new JSONObject();
                     o.put("kind", c.getString(1)); o.put("transport", c.getString(2));
                     o.put("start", c.getLong(3)); o.put("end", c.isNull(4) ? JSONObject.NULL : c.getLong(4));
                     o.put("detail", c.getString(5) == null ? "" : c.getString(5));
-                    net.put(o); netIds.add(c.getLong(0));
+                    net.put(o);
+                    if (!open) netIds.add(c.getLong(0));
                 }
             }
             JSONArray browse = new JSONArray();
