@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import wraps
 from urllib.parse import urlparse
 
@@ -190,6 +190,32 @@ def create_app(test_config=None):
             return redirect(url_for('login'))
         return render_template('dashboard.html', kiosk=True, screen_key=request.args.get('key', ''),
                                apk_url=app.config['APK_URL'])
+
+    @app.route('/report/print')
+    @viewer_required
+    def report_print():
+        """A plain, print-optimized HTML page covering every dashboard section
+        for the given filter — the person hits Ctrl+P / the browser's own
+        "Save as PDF" to get a PDF. Deliberately not server-rendered to PDF:
+        that would mean shipping a PDF/Arabic-text-shaping library and its
+        system dependencies (fonts, cairo/pango, ...) that may not exist on
+        every host this app gets deployed to, where the browser's own print
+        engine already renders Arabic/RTL correctly for free."""
+        a, b, tz, ids, now = params()
+        ov = stats.overview(ids, a, b, tz, now)
+        kpi_labels = {'screenTime': 'وقت الاستخدام', 'avgPerDay': 'المتوسط اليومي', 'sessions': 'جلسات الاستخدام',
+                      'appsUsed': 'تطبيقات مستخدمة', 'sites': 'صفحات مفتوحة', 'domains': 'مواقع مختلفة',
+                      'outages': 'عدد الانقطاعات', 'outageTime': 'مدة الانقطاع', 'availability': 'نسبة الاتصال',
+                      'download': 'تنزيل', 'upload': 'رفع'}
+        for k in ov['kpis']:
+            k['key'] = kpi_labels.get(k['key'], k['key'])
+        devs = Device.query.filter(Device.id.in_(ids)).all() if ids else []
+        fmt = lambda ms: datetime.fromtimestamp(ms / 1000).strftime('%Y-%m-%d %H:%M') if ms else '—'
+        browse_rows = stats.browse_table(ids, a, b, limit=200)
+        for r in browse_rows:
+            r['ts'] = fmt(r['ts'])
+        return render_template('report_print.html', ov=ov, devices=devs, browse_rows=browse_rows,
+                               period_label=f'{fmt(a)} → {fmt(b)}', generated_at=fmt(now))
 
     @app.route('/login', methods=['GET', 'POST'])
     def login():

@@ -21,6 +21,7 @@ const T = {
   ar: {
     today:'اليوم', yesterday:'أمس', d7:'٧ أيام', d30:'٣٠ يوماً', month:'هذا الشهر', custom:'مخصص',
     refresh:'تحديث', logout:'خروج', lang:'EN', allDevices:'كل الأجهزة', devices:'الأجهزة', done:'تم',
+    exportPdf:'تصدير PDF',
     overview:'نظرة عامة', apps:'التطبيقات', browse:'التصفح', net:'الشبكة',
     screenTime:'وقت الاستخدام', avgPerDay:'المتوسط اليومي', sessions:'جلسات الاستخدام', appsUsed:'تطبيقات مستخدمة',
     sites:'صفحات مفتوحة', domains:'مواقع مختلفة', outages:'عدد الانقطاعات', outageTime:'مدة الانقطاع', availability:'نسبة الاتصال',
@@ -82,6 +83,7 @@ const T = {
   en: {
     today:'Today', yesterday:'Yesterday', d7:'7 days', d30:'30 days', month:'This month', custom:'Custom',
     refresh:'Refresh', logout:'Logout', lang:'عربي', allDevices:'All devices', devices:'Devices', done:'Done',
+    exportPdf:'Export PDF',
     overview:'Overview', apps:'Apps', browse:'Browsing', net:'Network',
     screenTime:'Screen time', avgPerDay:'Daily average', sessions:'Usage sessions', appsUsed:'Apps used',
     sites:'Pages opened', domains:'Distinct sites', outages:'Outages', outageTime:'Outage time', availability:'Connectivity',
@@ -994,6 +996,7 @@ function renderTabs() {
 }
 function paintStatic() {
   $('#langBtn').textContent = t('lang'); $('#refreshBtn').textContent = t('refresh');
+  $('#exportPdfBtn').textContent = t('exportPdf');
   const lo = $('#logoutBtn'); if (lo) lo.textContent = t('logout');
   renderChips(); renderTabs(); renderDevPop();
 }
@@ -1014,6 +1017,7 @@ async function init() {
   try { S.allDevices = await api('/api/devices?' + (K.key ? 'key=' + encodeURIComponent(K.key) : '')); } catch (e) { S.allDevices = []; }
   $('#langBtn').onclick = () => { setLang(lang === 'ar' ? 'en' : 'ar'); paintStatic(); load(); };
   $('#refreshBtn').onclick = load;
+  $('#exportPdfBtn').onclick = () => window.open('/report/print?' + qs(), '_blank');
   const fd = $('#fromDate'), td = $('#toDate');
   // datetime-local values ("YYYY-MM-DDTHH:mm") parse directly — the user
   // now picks an exact start/end moment, not just whole days.
@@ -1027,6 +1031,12 @@ async function init() {
     let flip = false;
     setInterval(() => { flip = !flip; S.period = flip ? 'today' : 'd7'; load(); }, 30000);
     setInterval(load, 60000);
+  } else {
+    // Auto-refresh the dashboard itself so it reflects new data as it
+    // arrives, instead of only on a manual click of the refresh button.
+    // Paused while the tab isn't visible or the remote-control view is
+    // open (a refresh there would interrupt the live screen feed).
+    setInterval(() => { if (!document.hidden && !RC.id) load(); }, 20000);
   }
   load();
 }

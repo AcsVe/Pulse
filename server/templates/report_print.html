@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulse — تقرير</title>
+<style>
+  :root{ --navy:#164d72; --teal:#0b8f85; --line:#dbe5ec; --muted:#5d7283; --text:#10222f; }
+  *{box-sizing:border-box}
+  body{font-family:'Segoe UI',Tahoma,sans-serif;color:var(--text);margin:0;padding:28px;max-width:900px;margin-inline:auto}
+  h1{font-size:1.5rem;margin:0 0 4px;color:var(--navy)}
+  .meta{color:var(--muted);font-size:.85rem;margin-bottom:18px}
+  h2{font-size:1.1rem;color:var(--navy);border-bottom:2px solid var(--teal);padding-bottom:6px;margin:28px 0 10px}
+  table{width:100%;border-collapse:collapse;font-size:.86rem;margin-bottom:6px}
+  th,td{padding:7px 10px;text-align:start;border-bottom:1px solid var(--line)}
+  th{background:#eaf2f6;color:var(--navy);font-weight:800}
+  tr:nth-child(even) td{background:#fafcfd}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .kpi{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .kpi .l{font-size:.75rem;color:var(--muted);font-weight:700}
+  .kpi .v{font-size:1.25rem;font-weight:800;color:var(--navy)}
+  .noprint{margin-bottom:20px}
+  .noprint button{background:var(--navy);color:#fff;border:0;border-radius:8px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:.95rem}
+  .empty{color:var(--muted);font-size:.85rem;padding:8px 0}
+  @media print{
+    .noprint{display:none}
+    body{padding:0;max-width:none}
+    h2{break-after:avoid}
+    tr{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+  <div class="noprint"><button onclick="window.print()">🖨 طباعة / حفظ كـ PDF</button></div>
+
+  <h1>تقرير Pulse الشامل</h1>
+  <div class="meta">الفترة: {{ period_label }} &nbsp;|&nbsp; تاريخ الإنشاء: {{ generated_at }} &nbsp;|&nbsp;
+    الأجهزة: {{ devices|map(attribute='name')|join('، ') if devices else 'كل الأجهزة' }}</div>
+
+  <h2>نظرة عامة</h2>
+  <div class="kpis">
+    {% for k in ov.kpis %}
+    <div class="kpi"><div class="l">{{ k.key }}</div>
+      <div class="v">{% if k.value is none %}—{% elif k.unit == 'ms' %}{{ (k.value // 60000) }} د{% elif k.unit == 'bytes' %}{{ '%.1f'|format(k.value / 1048576) }} MB{% elif k.unit == 'pct' %}{{ '%.1f'|format(k.value) }}%{% else %}{{ k.value }}{% endif %}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <h2>الأكثر استخداماً (تطبيقات)</h2>
+  {% if ov.topApps %}
+  <table><tr><th>التطبيق</th><th>المدة</th></tr>
+    {% for a in ov.topApps %}<tr><td>{{ a.label }}</td><td>{{ ((a.ms or 0) // 60000) }} دقيقة</td></tr>{% endfor %}
+  </table>
+  {% else %}<div class="empty">لا توجد بيانات</div>{% endif %}
+
+  <h2>استهلاك الإنترنت حسب التطبيق</h2>
+  {% if ov.topDataApps %}
+  <table><tr><th>التطبيق</th><th>تنزيل</th><th>رفع</th></tr>
+    {% for a in ov.topDataApps %}<tr><td>{{ a.label }}</td><td>{{ '%.1f'|format((a.rx or 0) / 1048576) }} MB</td><td>{{ '%.1f'|format((a.tx or 0) / 1048576) }} MB</td></tr>{% endfor %}
+  </table>
+  {% else %}<div class="empty">لا توجد بيانات</div>{% endif %}
+
+  <h2>المواقع الأكثر زيارة</h2>
+  {% if ov.topDomains %}
+  <table><tr><th>الموقع</th><th>عدد الزيارات</th></tr>
+    {% for d in ov.topDomains %}<tr><td dir="ltr" style="text-align:end">{{ d.domain }}</td><td>{{ d.count }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<div class="empty">لا توجد بيانات</div>{% endif %}
+
+  <h2>سجل التصفح (آخر {{ browse_rows|length }} عنصر)</h2>
+  {% if browse_rows %}
+  <table><tr><th>الوقت</th><th>الجهاز</th><th>الموقع</th><th>العنوان</th></tr>
+    {% for r in browse_rows %}<tr><td>{{ r.ts }}</td><td>{{ r.device }}</td><td dir="ltr" style="text-align:end">{{ r.domain }}</td><td>{{ r.title }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<div class="empty">لا توجد بيانات</div>{% endif %}
+
+  <h2>الشبكة</h2>
+  {% if ov.net.ms %}
+  <table><tr><th>الحالة</th><th>المدة</th><th>عدد الأحداث</th></tr>
+    {% for k, v in ov.net.ms.items() %}<tr><td>{{ k }}</td><td>{{ ((v or 0) // 60000) }} دقيقة</td><td>{{ ov.net.count[k] }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<div class="empty">لا توجد بيانات</div>{% endif %}
+
+  <h2>الأجهزة</h2>
+  {% if devices %}
+  <table><tr><th>الاسم</th><th>الطراز</th><th>عنوان IP</th><th>نوع الاتصال</th></tr>
+    {% for d in devices %}<tr><td>{{ d.name }}</td><td>{{ d.model or '—' }}</td><td dir="ltr" style="text-align:end">{{ d.ip_address or '—' }}</td><td>{{ d.connection_type or '—' }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<div class="empty">لا توجد أجهزة</div>{% endif %}
+
+</body>
+</html>
