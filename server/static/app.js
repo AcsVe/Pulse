@@ -67,6 +67,7 @@ const T = {
     on_:'مفعّلة', off_:'متوقفة', mon:'إثنين', tue:'ثلاثاء', wed:'أربعاء', thu:'خميس', fri:'جمعة', sat:'سبت', sun:'أحد',
     remote:'تحكم عن بعد', remoteStart:'بدء التحكم عن بعد', remoteStop:'إيقاف', remoteWaiting:'بانتظار أول صورة من الهاتف…',
     remoteLost:'انقطع الاتصال بالهاتف — تأكد أنه متصل بالإنترنت وأن التحكم عن بعد ما زال مفعّلاً عليه',
+    remoteStale:'البث متوقف — الصورة المعروضة ليست حيّة (آخر صورة وصلت منذ لحظات ولم تتحدث)',
     remoteBack:'رجوع', remoteHome:'الرئيسية', remoteRecents:'الأخيرة', remoteSendText:'إرسال نص',
     remoteTextPh:'اكتب نصاً لإرساله إلى الحقل المُركَّز عليه في الهاتف', remoteHint:'انقر على الصورة للنقر على الهاتف. اسحب للتمرير.',
     remoteZoomIn:'تكبير', remoteZoomOut:'تصغير', remoteClose:'إغلاق', remoteApps:'التطبيقات',
@@ -134,6 +135,7 @@ const T = {
     accessibilityWarn:'⚠ Accessibility service is not enabled on this phone — taps and swipes will not work. Enable it from the phone\'s settings inside the Pulse app.',
     remote:'Remote control', remoteStart:'Start remote control', remoteStop:'Stop', remoteWaiting:'Waiting for the first frame from the phone…',
     remoteLost:"Lost contact with the phone — check that it's online and remote control is still enabled on it",
+    remoteStale:"Stream stalled — the picture shown isn't live (the last frame stopped updating)",
     remoteBack:'Back', remoteHome:'Home', remoteRecents:'Recents', remoteSendText:'Send text',
     remoteTextPh:'Type text to send to the focused field on the phone', remoteHint:'Click the image to tap on the phone. Drag to swipe.',
     remoteZoomIn:'Zoom in', remoteZoomOut:'Zoom out', remoteClose:'Close', remoteApps:'Apps',
@@ -906,6 +908,7 @@ function openRemotePanel(id, name) {
       <div class="remote-screen-wrap">
         <div class="remote-wait" id="rcWait">${esc(t('remoteWaiting'))}</div>
         <img id="rcImg" hidden>
+        <div class="remote-stale hidden" id="rcStale">${esc(t('remoteStale'))}</div>
       </div>
       <div class="remote-apps-panel hidden" id="rcAppsPanel">
         <input id="rcAppsSearch" placeholder="${esc(t('remoteAppsSearch'))}">
@@ -946,8 +949,12 @@ function openRemotePanel(id, name) {
     remoteCmd({ action: 'text', text: v }); $('#rcText').value = '';
   };
   const img = $('#rcImg');
-  RC.failStreak = 0;
-  img.onload = () => { RC.failStreak = 0; const w = $('#rcWait'); if (w) w.hidden = true; img.hidden = false; };
+  RC.failStreak = 0; RC.metaTick = 0; RC.lastFrameAt = null;
+  img.onload = () => {
+    RC.failStreak = 0;
+    const w = $('#rcWait'); if (w) w.hidden = true;
+    img.hidden = false;
+  };
   img.onerror = () => {
     // A single missed poll is normal (a frame just wasn't ready yet at this
     // exact 300ms tick) and shouldn't disturb an already-showing image — it
@@ -960,6 +967,7 @@ function openRemotePanel(id, name) {
     if (RC.failStreak >= 5) {
       const w = $('#rcWait'); if (w) { w.textContent = t('remoteLost'); w.hidden = false; }
       img.hidden = true;
+      const stale = $('#rcStale'); if (stale) stale.classList.add('hidden');
     }
   };
   img.onmousedown = e => {
@@ -988,10 +996,32 @@ function openRemotePanel(id, name) {
 }
 async function tickRemoteFrame() {
   if (!RC.id) return;
-  try {
-    const d = (S.allDevices || []).find(x => String(x.id) === String(RC.id)) || await api(`/api/devices`).then(l => l.find(x => String(x.id) === String(RC.id)));
-    if (d) { RC.w = d.remoteScreenW || RC.w; RC.h = d.remoteScreenH || RC.h; }
-  } catch (e) { /* ignore — keep last known resolution */ }
+  // The dashboard's own auto-refresh is deliberately paused while a remote
+  // session is open (it would fight the live screen feed for #main), which
+  // means S.allDevices sits frozen at whatever it was when the panel opened
+  // — so reading remoteFrameAt from that cache would show "updating" forever
+  // using the snapshot from the moment the session started, never actually
+  // detecting a stalled stream. Polled on its own slower cadence (~1.2s, not
+  // every 300ms tick) so this still catches a real phone-side freeze without
+  // hitting /api/devices as hard as the frame fetch itself.
+  RC.metaTick = (RC.metaTick || 0) + 1;
+  if (RC.metaTick % 4 === 0) {
+    try {
+      const d = await api('/api/devices').then(l => l.find(x => String(x.id) === String(RC.id)));
+      if (d) {
+        RC.w = d.remoteScreenW || RC.w; RC.h = d.remoteScreenH || RC.h;
+        const stale = $('#rcStale');
+        if (stale && d.remoteFrameAt) {
+          if (RC.lastFrameAt && d.remoteFrameAt === RC.lastFrameAt && !$('#rcImg').hidden) {
+            stale.classList.remove('hidden');
+          } else {
+            stale.classList.add('hidden');
+          }
+          RC.lastFrameAt = d.remoteFrameAt;
+        }
+      }
+    } catch (e) { /* ignore — keep last known resolution/state */ }
+  }
   const img = $('#rcImg'); if (!img) return;
   img.src = `/api/devices/${RC.id}/screen.jpg?t=${Date.now()}` + (K.key ? `&key=${encodeURIComponent(K.key)}` : '');
 }
