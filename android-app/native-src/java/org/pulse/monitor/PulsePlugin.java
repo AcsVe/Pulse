@@ -276,10 +276,43 @@ public class PulsePlugin extends Plugin {
 
     @PluginMethod
     public void requestDeviceAdmin(PluginCall call) {
+        // Some OEM system UIs (MIUI in particular) render this exact system
+        // screen as blank/black for some users — an OS-level quirk, not
+        // something this intent's extras control. We can't fix that render,
+        // but we used to also leave the JS side with no idea what happened:
+        // a plain startActivity() resolves the moment the screen *opens*, so
+        // "Grant" flips straight to "Granted"-looking silence whether or not
+        // the user ever actually saw and tapped Activate. Routing it through
+        // startActivityForResult means we resolve only once that screen
+        // closes, with the real isAdminActive() value — so the JS layer can
+        // tell a genuine grant from "nothing happened" and point at the
+        // manual Settings path for the latter.
         Intent i = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
         i.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, PulseDeviceAdminReceiver.componentName(getContext()));
         i.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, getContext().getString(R.string.pulse_device_admin_desc));
-        if (startActivitySafely(i)) call.resolve(); else call.reject("could_not_open_device_admin_settings");
+        try {
+            saveCall(call);
+            startActivityForResult(call, i, "deviceAdminResult");
+        } catch (Exception e) {
+            call.reject("could_not_open_device_admin_settings");
+        }
+    }
+
+    @ActivityCallback
+    private void deviceAdminResult(PluginCall call, androidx.activity.result.ActivityResult result) {
+        if (call == null) return;
+        DevicePolicyManager dpm = (DevicePolicyManager) getContext().getSystemService(Context.DEVICE_POLICY_SERVICE);
+        boolean active = dpm != null && dpm.isAdminActive(PulseDeviceAdminReceiver.componentName(getContext()));
+        JSObject r = new JSObject(); r.put("value", active); call.resolve(r);
+    }
+
+    /** Fallback for phones where ACTION_ADD_DEVICE_ADMIN itself misbehaves (seen on some
+     *  MIUI builds as a blank/black screen): the generic security settings list, where
+     *  "Device admin apps" (wording varies by OEM/Android version) is always reachable. */
+    @PluginMethod
+    public void openSecuritySettings(PluginCall call) {
+        if (startActivitySafely(new Intent(Settings.ACTION_SECURITY_SETTINGS))) call.resolve();
+        else call.reject("could_not_open_security_settings");
     }
 
     // ── remote screen view + control ────────────────────────────────────

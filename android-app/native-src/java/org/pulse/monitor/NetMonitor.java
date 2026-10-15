@@ -151,7 +151,17 @@ public class NetMonitor {
 
     private String transportName() { return currentTransport(ctx); }
 
-    /** Static variant other collectors (data usage, etc.) can call without an instance. */
+    /** Static variant other collectors (data usage, etc.) can call without an instance.
+     *
+     *  getActiveNetwork() normally returns the wifi/cellular/ethernet network directly —
+     *  but Pulse runs its own always-on local VPN (DnsVpnService, for DNS-based browse
+     *  capture), and once that's up, Android reports *it* as the active network instead.
+     *  A VPN's own NetworkCapabilities only advertise TRANSPORT_VPN, not the underlying
+     *  radio, so every caller here (sync's connType, the per-device "connection type" and
+     *  Wi-Fi speed/band shown on the dashboard, and each net-event's transport field) was
+     *  silently going blank the moment the DNS monitor started — which for most phones is
+     *  "basically always". When the active network is a VPN, walk the underlying networks
+     *  (cm.getAllNetworks()) and report whichever one is actually carrying traffic instead. */
     public static String currentTransport(Context ctx) {
         ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null) return "";
@@ -159,9 +169,35 @@ public class NetMonitor {
         if (active == null) return "";
         NetworkCapabilities caps = cm.getNetworkCapabilities(active);
         if (caps == null) return "";
+        String fromCaps = transportFromCaps(caps);
+        if (fromCaps != null) return fromCaps;
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+            String underlying = underlyingTransport(cm);
+            if (underlying != null) return underlying;
+        }
+        return "";
+    }
+
+    private static String transportFromCaps(NetworkCapabilities caps) {
         if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return "wifi";
         if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) return "cellular";
         if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return "ethernet";
-        return "";
+        return null;
+    }
+
+    /** Best real (non-VPN) network currently up, preferring one the OS has validated. */
+    private static String underlyingTransport(ConnectivityManager cm) {
+        Network[] nets;
+        try { nets = cm.getAllNetworks(); } catch (Exception e) { return null; }
+        String fallback = null;
+        for (Network n : nets) {
+            NetworkCapabilities c = cm.getNetworkCapabilities(n);
+            if (c == null || c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue;
+            String t = transportFromCaps(c);
+            if (t == null) continue;
+            if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return t;
+            if (fallback == null) fallback = t;
+        }
+        return fallback;
     }
 }

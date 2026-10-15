@@ -17,6 +17,7 @@ const T = {
     pVpn: 'مراقبة DNS', pVpnD: 'لتسجيل أسماء المواقع عبر كل التطبيقات', grant: 'منح', granted: 'ممنوح', opened: 'تم فتحها ✓',
     permError: 'تعذّر فتح هذا الإعداد على هذا الهاتف. جرّب فتحه يدويًا من إعدادات أندرويد.',
     pAdmin: 'حماية إلغاء التثبيت', pAdminD: 'اضغط "منح" ثم اضغط "تفعيل" بالشاشة التي تظهر (فتح الشاشة وحده لا يكفي). للإيقاف لاحقاً: إعدادات الهاتف ← الأمان ← تطبيقات مدير الجهاز ← Pulse ← تعطيل',
+    pAdminFallback: 'لم يتم التفعيل. على بعض الهواتف (خصوصاً شاومي/MIUI) تظهر هذه الشاشة سوداء بسبب النظام نفسه. هل تريد فتح إعدادات الأمان يدوياً للبحث عن "تطبيقات مدير الجهاز" وتفعيل Pulse من هناك؟',
     invalidCode: 'الرمز غير صحيح أو منتهي، أو تعذر الاتصال بالخادم', never: 'لم تحدث بعد', neverSynced: 'لم تتم بعد',
     stopConfirm: 'سيتم إيقاف جمع البيانات على هذا الجهاز. هل تريد المتابعة؟', justNow: 'الآن',
     lockTitle: 'أدخل رمز الدخول', unlock: 'دخول', wrongPin: 'رمز غير صحيح',
@@ -44,6 +45,7 @@ const T = {
     pVpn: 'DNS monitoring', pVpnD: 'To log visited domains across all apps', grant: 'Grant', granted: 'Granted', opened: 'Opened ✓',
     permError: "Couldn't open this setting on this phone. Try opening it manually from Android settings.",
     pAdmin: 'Uninstall protection', pAdminD: 'Tap "Grant", then tap "Activate" on the screen that opens (opening the screen alone isn\'t enough). To turn it off later: Phone Settings → Security → Device admin apps → Pulse → Deactivate',
+    pAdminFallback: "It wasn't activated. On some phones (especially Xiaomi/MIUI) this screen renders blank/black due to the phone's own system UI. Open security settings manually to find \"Device admin apps\" and activate Pulse from there?",
     invalidCode: 'The code is wrong or expired, or the server could not be reached', never: 'Not yet', neverSynced: 'Not yet',
     stopConfirm: 'This stops data collection on this device. Continue?', justNow: 'Just now',
     lockTitle: 'Enter passcode', unlock: 'Unlock', wrongPin: 'Wrong passcode',
@@ -103,8 +105,17 @@ async function refreshPerms() {
       <button class="pbtn">${on ? (noRealStatus ? t('opened') : t('granted')) : t('grant')}</button>`;
     row.querySelector('button').onclick = async () => {
       try {
-        await p[info.action]();
+        const res = await p[info.action]();
         if (noRealStatus) { try { localStorage.setItem('pulse_autostart_opened', '1'); } catch (e) {} }
+        // requestDeviceAdmin only resolves once that system screen closes, with
+        // the real on/off state — so a still-false result here means the screen
+        // didn't actually activate anything (seen as a blank/black screen on
+        // some phones, a known OEM quirk with this particular system screen,
+        // not something this app controls). Offer the manual path instead of
+        // leaving the "Grant" button looking like it silently did nothing.
+        if (info.key === 'deviceAdmin' && res && res.value === false) {
+          if (confirm(t('pAdminFallback'))) p.openSecuritySettings().catch(() => alert(t('permError')));
+        }
       } catch (e) { alert(t('permError')); return; }
       setTimeout(refreshPerms, 600);
     };
@@ -171,7 +182,13 @@ async function routeAfterConsent() {
 
 async function init() {
   paint();
-  $('#langBtn').onclick = () => { lang = lang === 'ar' ? 'en' : 'ar'; paint(); refreshPerms(); };
+  // paint() only flips the static data-t labels — refreshPerms()/refreshStatus()
+  // also redraw values they compute from `lang` (locale-formatted dates, the
+  // remote-control button text), which used to stay in the old language until
+  // the next unrelated refresh. On the "monitoring is running" screen — where
+  // a device that's already set up spends all its time — that left only the
+  // headings flipping and made switching to English look like it did nothing.
+  $('#langBtn').onclick = () => { lang = lang === 'ar' ? 'en' : 'ar'; paint(); refreshPerms(); refreshStatus(); };
   $('#consentChk').onchange = e => { $('#consentNext').disabled = !e.target.checked; };
   $('#consentNext').onclick = async () => {
     const p = Pulse(); if (p) await p.setConsented();
