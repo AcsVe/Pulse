@@ -3,7 +3,8 @@
 const T = {
   ar: {
     consentTitle: 'هذا الجهاز يخضع للمراقبة', consentAgree: 'أوافق على تشغيل المراقبة على هذا الجهاز', continue: 'متابعة',
-    connectTitle: 'الاتصال بالخادم', serverUrl: 'رابط الخادم', enrollCode: 'رمز الربط', connect: 'اتصال',
+    connectTitle: 'الاتصال بالخادم', serverUrl: 'رابط الخادم', enrollCode: 'رمز الربط', connect: 'اتصال', cancel: 'إلغاء',
+    relink: 'تحديث رمز الربط', relinkHint: 'استخدم هذا لتحديث رمز الربط بعد توليد رمز جديد من لوحة التحكم — بلا حذف أو إعادة تثبيت التطبيق.',
     permsTitle: 'الأذونات المطلوبة', permsHint: 'امنح كل إذن لتعمل كل الميزات بشكل صحيح', start: 'بدء المراقبة',
     runningTitle: 'المراقبة تعمل', device: 'الجهاز', server: 'الخادم', lastSync: 'آخر مزامنة', queued: 'بانتظار الإرسال',
     syncNow: 'مزامنة الآن', checkPerms: 'إعادة فحص الأذونات', stop: 'إيقاف المراقبة',
@@ -29,7 +30,8 @@ const T = {
   },
   en: {
     consentTitle: 'This device is monitored', consentAgree: 'I agree to run monitoring on this device', continue: 'Continue',
-    connectTitle: 'Connect to server', serverUrl: 'Server URL', enrollCode: 'Enrollment code', connect: 'Connect',
+    connectTitle: 'Connect to server', serverUrl: 'Server URL', enrollCode: 'Enrollment code', connect: 'Connect', cancel: 'Cancel',
+    relink: 'Update linking code', relinkHint: 'Use this to update the linking code after generating a new one from the dashboard — no need to uninstall or reinstall the app.',
     permsTitle: 'Required permissions', permsHint: 'Grant each permission so every feature works correctly', start: 'Start monitoring',
     runningTitle: 'Monitoring is running', device: 'Device', server: 'Server', lastSync: 'Last sync', queued: 'Queued',
     syncNow: 'Sync now', checkPerms: 'Recheck permissions', stop: 'Stop monitoring',
@@ -186,11 +188,29 @@ async function init() {
     $('#enrollBtn').disabled = true;
     try {
       await p.enroll({ serverUrl, code });
-      show('perms'); refreshPerms();
+      // enroll() just re-points the SAME locally-stored device identity at
+      // a (possibly new) server+code — it doesn't reset whether monitoring
+      // was already running. So if this was a re-link (relinkBtn, from an
+      // already-running device) go straight back to status instead of
+      // routing through first-run perms/start again.
+      const cfg = await p.getConfig();
+      if (cfg.enabled) { show('status'); refreshStatus(); }
+      else { show('perms'); refreshPerms(); }
     } catch (e) {
       $('#enrollErr').textContent = t('invalidCode');
       $('#enrollErr').classList.remove('hidden');
     } finally { $('#enrollBtn').disabled = false; }
+  };
+  $('#enrollCancelBtn').onclick = () => { show('status'); refreshStatus(); };
+  $('#relinkBtn').onclick = async () => {
+    const p = Pulse(); if (!p) return;
+    const cfg = await p.getConfig();
+    $('#serverUrl').value = cfg.serverUrl || '';
+    $('#enrollCode').value = '';
+    $('#enrollErr').classList.add('hidden');
+    $('#relinkHint').classList.remove('hidden');
+    $('#enrollCancelBtn').classList.remove('hidden');
+    show('enroll');
   };
 
   $('#startBtn').onclick = async () => {
