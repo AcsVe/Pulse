@@ -66,6 +66,14 @@ svg text{font-family:inherit}
 .legend.col{flex-direction:column;gap:6px;justify-content:center}
 .pie-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .pie-wrap svg{flex-shrink:0}
+.chart-hit{cursor:pointer;transition:opacity .1s}
+.chart-hit:hover{opacity:.82}
+/* Cursor-tracking tooltip for bars/stacks/pie slices (see initChartTooltip
+   in app.js) — a real <title> already exists on each element as a fallback
+   for touch/accessibility, but it's slow and browser-styled; this reads the
+   same value instantly, in the dashboard's own look. */
+.chart-tip{position:fixed;z-index:50;background:#16232c;color:#f3f8fb;font-size:.82rem;line-height:1.3;padding:6px 10px;border-radius:7px;box-shadow:0 6px 18px rgba(0,0,0,.25);pointer-events:none;max-width:260px}
+.chart-tip.hidden{display:none}
 .barrow{display:grid;grid-template-columns:minmax(90px,1.2fr) 3fr auto;gap:8px;align-items:center;margin:7px 0;font-size:.88rem}
 .barrow .bar{height:12px;background:#e8eff4;border-radius:6px;overflow:hidden;position:relative}
 .barrow .bar b{display:block;height:100%;background:var(--teal);border-radius:6px}

@@ -226,6 +226,13 @@ function toast(msg) { const e = $('#toast'); e.textContent = msg; e.classList.ad
 
 // ── charts (hand-rolled SVG) ──────────────────────────────────────────────
 function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / p) * p; }
+// Axis text used to be a flat font-size:22 regardless of how many bars/ticks
+// were on screen — fine for a week of daily bars, but with 30+ days or all 24
+// hours the labels overlapped into an unreadable smear, while a 3-4 point
+// chart looked unnecessarily small. Scale the axis font down as the point
+// count grows (and let it grow back up when there are only a few), so each
+// chart's text is sized to what's actually on it.
+function axisFont(n) { return n <= 8 ? 24 : n <= 16 ? 20 : n <= 31 ? 16 : 13; }
 function barChart(cur, prev, { h = 210, unit = 'ms' } = {}) {
   const n = cur.length; if (!n) return `<div class="empty">${t('noData')}</div>`;
   // W is deliberately smaller than the typical card width (not 1:1 with
@@ -239,20 +246,21 @@ function barChart(cur, prev, { h = 210, unit = 'ms' } = {}) {
   const slot = innerW / n, bw = Math.max(2, Math.min(34, slot * 0.62));
   const rtl = document.documentElement.dir === 'rtl';
   const X = i => rtl ? W - 6 - (i + 0.5) * slot : padL + (i + 0.5) * slot;
+  const fs = axisFont(n);
   let g = '';
   for (let i = 0; i <= 4; i++) {
     const y = padT + innerH - innerH * i / 4, val = max * i / 4;
     g += `<line x1="${padL}" x2="${W-6}" y1="${y}" y2="${y}" stroke="#d6e1e9" stroke-dasharray="3 4" opacity=".7"/>`;
-    g += `<text x="${rtl ? W - 0 : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="22">${esc(fmtVal(val, unit))}</text>`;
+    g += `<text x="${rtl ? W - 0 : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="${fs}">${esc(fmtVal(val, unit))}</text>`;
   }
   cur.forEach((d, i) => {
     const bh = innerH * d.v / max, x = X(i);
     if (prev && prev[i]) {
       const ph = innerH * prev[i].v / max;
-      g += `<rect x="${x - bw/2 - 3}" y="${padT + innerH - ph}" width="${bw}" height="${ph}" rx="2" fill="#aebfcc" opacity=".8"><title>${esc(prev[i].label)} — ${esc(fmtVal(prev[i].v, unit))}</title></rect>`;
+      g += `<rect class="chart-hit" x="${x - bw/2 - 3}" y="${padT + innerH - ph}" width="${bw}" height="${Math.max(0, ph)}" rx="2" fill="#aebfcc" opacity=".8" data-tip="${esc(prev[i].label)} — ${esc(fmtVal(prev[i].v, unit))}"><title>${esc(prev[i].label)} — ${esc(fmtVal(prev[i].v, unit))}</title></rect>`;
     }
-    g += `<rect x="${x - bw/2 + (prev ? 3 : 0)}" y="${padT + innerH - bh}" width="${bw}" height="${Math.max(0, bh)}" rx="2" fill="var(--teal)"><title>${esc(d.label)} — ${esc(fmtVal(d.v, unit))}</title></rect>`;
-    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${x}" y="${h - 6}" text-anchor="middle" font-size="22">${esc(d.short)}</text>`;
+    g += `<rect class="chart-hit" x="${x - bw/2 + (prev ? 3 : 0)}" y="${padT + innerH - bh}" width="${bw}" height="${Math.max(0, bh)}" rx="2" fill="var(--teal)" data-tip="${esc(d.label)} — ${esc(fmtVal(d.v, unit))}"><title>${esc(d.label)} — ${esc(fmtVal(d.v, unit))}</title></rect>`;
+    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${x}" y="${h - 6}" text-anchor="middle" font-size="${fs}">${esc(d.short)}</text>`;
   });
   return `<svg viewBox="0 0 ${W} ${h}" width="100%" role="img">${g}</svg>`;
 }
@@ -264,19 +272,20 @@ function stackedChart(days) {
   const slot = innerW / n, bw = Math.max(2, Math.min(34, slot * 0.62));
   const rtl = document.documentElement.dir === 'rtl';
   const X = i => rtl ? W - 6 - (i + 0.5) * slot : padL + (i + 0.5) * slot;
+  const fs = axisFont(n);
   let g = '';
   for (let i = 0; i <= 4; i++) {
     const y = padT + innerH - innerH * i / 4;
     g += `<line x1="${padL}" x2="${W-6}" y1="${y}" y2="${y}" stroke="#d6e1e9" stroke-dasharray="3 4" opacity=".7"/>`;
-    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="22">${Math.round(max * i / 4)}</text>`;
+    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="${fs}">${Math.round(max * i / 4)}</text>`;
   }
   rows.forEach((r, i) => {
     let y = padT + innerH;
     r.parts.forEach(p => {
       const bh = innerH * p.v / max; y -= bh;
-      if (bh > 0) g += `<rect x="${X(i) - bw/2}" y="${y}" width="${bw}" height="${bh}" fill="${KIND_COLOR[p.k]}"><title>${esc(r.label)} — ${esc(t(p.k))}: ${Math.round(p.v)}${t('m')}</title></rect>`;
+      if (bh > 0) g += `<rect class="chart-hit" x="${X(i) - bw/2}" y="${y}" width="${bw}" height="${bh}" fill="${KIND_COLOR[p.k]}" data-tip="${esc(r.label)} — ${esc(t(p.k))}: ${Math.round(p.v)}${esc(t('m'))}"><title>${esc(r.label)} — ${esc(t(p.k))}: ${Math.round(p.v)}${t('m')}</title></rect>`;
     });
-    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${X(i)}" y="${h - 6}" text-anchor="middle" font-size="22">${esc(r.short)}</text>`;
+    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${X(i)}" y="${h - 6}" text-anchor="middle" font-size="${fs}">${esc(r.short)}</text>`;
   });
   const legend = ['no_internet','failed','disconnected'].map(k => `<span><i style="background:${KIND_COLOR[k]}"></i>${esc(t(k))}</span>`).join('');
   return `<svg viewBox="0 0 ${W} ${h}" width="100%" role="img">${g}</svg><div class="legend">${legend}</div>`;
@@ -304,10 +313,36 @@ function pieChart(parts, fmt) {
     const large = (a1 - a0) > 180 ? 1 : 0;
     const d = frac >= 0.999 ? `M${cx},${cy-r} A${r},${r} 0 1,1 ${cx-0.01},${cy-r} Z`
       : `M${cx},${cy} L${x0},${y0} A${r},${r} 0 ${large},1 ${x1},${y1} Z`;
-    paths += `<path d="${d}" fill="${p.color || PIE_COLORS[i % PIE_COLORS.length]}"><title>${esc(p.name)} — ${esc(fmt ? fmt(p.v) : p.v)} (${(frac*100).toFixed(1)}%)</title></path>`;
+    const tip = `${esc(p.name)} — ${esc(fmt ? fmt(p.v) : p.v)} (${(frac*100).toFixed(1)}%)`;
+    paths += `<path class="chart-hit" d="${d}" fill="${p.color || PIE_COLORS[i % PIE_COLORS.length]}" data-tip="${tip}"><title>${tip}</title></path>`;
   });
   const legend = parts.filter(p => p.v > 0).map((p, i) => `<span><i style="background:${p.color || PIE_COLORS[i % PIE_COLORS.length]}"></i>${esc(p.name)} — ${esc(fmt ? fmt(p.v) : p.v)}</span>`).join('');
   return `<div class="pie-wrap"><svg viewBox="0 0 180 180" width="180" height="180">${paths}</svg><div class="legend col">${legend}</div></div>`;
+}
+
+// Bars/stacks/pie slices already carried a native SVG <title> (a real
+// tooltip, but slow to appear and styled by the OS, not the page — easy to
+// miss, which is what "hoover the mouse = alt text for value" was flagging).
+// This adds an instant, styled tooltip that tracks the cursor instead,
+// without touching every chart function individually: one delegated
+// listener on #main reads the same value off each hit-target's data-tip.
+let chartTipEl = null;
+function initChartTooltip() {
+  if (chartTipEl) return; // only wire this up once
+  chartTipEl = el('div', { id: 'chartTip', className: 'chart-tip hidden' });
+  document.body.appendChild(chartTipEl);
+  const main = $('#main');
+  main.addEventListener('mousemove', e => {
+    const hit = e.target.closest('.chart-hit');
+    if (!hit) { chartTipEl.classList.add('hidden'); return; }
+    chartTipEl.textContent = hit.dataset.tip || '';
+    chartTipEl.classList.remove('hidden');
+    const pad = 14, vw = window.innerWidth, vh = window.innerHeight;
+    const w = chartTipEl.offsetWidth, hgt = chartTipEl.offsetHeight;
+    chartTipEl.style.left = Math.max(4, Math.min(e.clientX + pad, vw - w - 4)) + 'px';
+    chartTipEl.style.top = Math.max(4, Math.min(e.clientY + pad, vh - hgt - 4)) + 'px';
+  });
+  main.addEventListener('mouseleave', () => chartTipEl.classList.add('hidden'));
 }
 
 // ── overview ──────────────────────────────────────────────────────────────
@@ -1181,6 +1216,7 @@ async function init() {
   const onRange = () => { if (fd.value && td.value) { S.from = new Date(fd.value).getTime(); S.to = new Date(td.value).getTime(); load(); } };
   fd.onchange = td.onchange = onRange;
   paintStatic();
+  initChartTooltip();
   if (K.kiosk) {
     S.tab = 'overview'; S.period = 'd7';
     const tick = () => { const c = $('#clock'); if (c) { const d = new Date(); c.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`; } };
