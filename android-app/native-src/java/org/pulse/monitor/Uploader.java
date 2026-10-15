@@ -176,6 +176,38 @@ public class Uploader {
         } catch (Exception ignored) { }
     }
 
+    /** Enumerates launchable apps (same query the device's own home-screen
+     *  launcher uses) and reports them to the server, for the dashboard's
+     *  remote-control "open app" picker. Called from ScreenCaptureService's
+     *  watch loop, already off the main thread, when the server's
+     *  /api/v1/remote-state says this device's cached list is missing or
+     *  stale — not on a fixed schedule of its own. */
+    public static void uploadApps(Context ctx) {
+        Db db = Db.get(ctx);
+        String serverUrl = db.getStr("server_url", null);
+        String token = db.getStr("device_token", null);
+        if (serverUrl == null || token == null) return;
+        try {
+            PackageManager pm = ctx.getPackageManager();
+            Intent launcherIntent = new Intent(Intent.ACTION_MAIN);
+            launcherIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+            List<android.content.pm.ResolveInfo> apps = pm.queryIntentActivities(launcherIntent, 0);
+            JSONArray arr = new JSONArray();
+            String ownPkg = ctx.getPackageName();
+            for (android.content.pm.ResolveInfo ri : apps) {
+                String pkg = ri.activityInfo != null ? ri.activityInfo.packageName : null;
+                if (pkg == null || pkg.equals(ownPkg)) continue; // no point offering to close/relaunch Pulse itself
+                JSONObject o = new JSONObject();
+                o.put("pkg", pkg);
+                o.put("label", String.valueOf(ri.loadLabel(pm)));
+                arr.put(o);
+            }
+            JSONObject body = new JSONObject();
+            body.put("apps", arr);
+            post(serverUrl + "/api/v1/apps", body, token);
+        } catch (Exception ignored) { }
+    }
+
     private static JSONObject post(String urlStr, JSONObject body, String bearer) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
         try {

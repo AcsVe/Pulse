@@ -52,9 +52,9 @@ public class ScreenCaptureService extends Service {
     private static final int NOTIF_ID = 1002;
     public static final String EXTRA_RESULT_CODE = "resultCode";
     public static final String EXTRA_RESULT_DATA = "resultData";
-    private static final long WATCH_MS = 1500;   // how often to check remote-state when idle
-    private static final long FRAME_MS = 400;     // how often to capture+upload while active
-    private static final long CMD_MS = 300;       // how often to poll for commands while active
+    private static final long WATCH_MS = 1000;   // how often to check remote-state when idle
+    private static final long FRAME_MS = 250;     // how often to capture+upload while active
+    private static final long CMD_MS = 150;       // how often to poll for commands while active
 
     private MediaProjection projection;
     private VirtualDisplay virtualDisplay;
@@ -106,10 +106,17 @@ public class ScreenCaptureService extends Service {
     private final Runnable watchTask = new Runnable() {
         @Override public void run() {
             boolean wasActive = active;
-            active = checkRemoteActive();
+            JSONObject state = fetchRemoteState();
+            active = state != null && state.optBoolean("active", false);
             if (active && !wasActive) {
                 handler.post(frameTask);
                 handler.post(cmdTask);
+            }
+            // Fire-and-forget on the same background thread — the server only
+            // asks for this once per fresh/stale remote session (see
+            // /api/v1/remote-state's needApps), not on every watch tick.
+            if (state != null && state.optBoolean("needApps", false)) {
+                try { Uploader.uploadApps(ScreenCaptureService.this); } catch (Exception ignored) { }
             }
             handler.postDelayed(this, WATCH_MS);
         }
@@ -154,16 +161,15 @@ public class ScreenCaptureService extends Service {
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, imageReader.getSurface(), null, handler);
     }
 
-    private boolean checkRemoteActive() {
+    private JSONObject fetchRemoteState() {
         Db db = Db.get(this);
         String serverUrl = db.getStr("server_url", null);
         String token = db.getStr("device_token", null);
-        if (serverUrl == null || token == null) return false;
+        if (serverUrl == null || token == null) return null;
         try {
-            JSONObject res = get(serverUrl + "/api/v1/remote-state", token);
-            return res != null && res.optBoolean("active", false);
+            return get(serverUrl + "/api/v1/remote-state", token);
         } catch (IOException e) {
-            return false;
+            return null;
         }
     }
 
@@ -227,13 +233,19 @@ public class ScreenCaptureService extends Service {
         JSONArray cmds = res.optJSONArray("commands");
         if (cmds == null) return;
         PulseAccessibilityService svc = PulseAccessibilityService.get();
-        if (svc == null) return; // accessibility not enabled — commands are silently dropped
         for (int i = 0; i < cmds.length(); i++) {
             JSONObject c = cmds.optJSONObject(i);
             if (c == null) continue;
             String action = c.optString("action", "");
             JSONObject p = c.optJSONObject("params");
             if (p == null) p = new JSONObject();
+            // launch/close don't need the accessibility service — they go
+            // through PackageManager/ActivityManager directly — so they still
+            // work even if accessibility isn't bound. Everything else (taps,
+            // swipes, typing, back/home/recents) genuinely needs it.
+            if ("launch".equals(action)) { launchApp(p.optString("pkg", "")); continue; }
+            if ("close".equals(action)) { closeApp(p.optString("pkg", ""), svc); continue; }
+            if (svc == null) continue; // accessibility not enabled — the rest are silently dropped
             switch (action) {
                 case "tap": svc.tap(p.optInt("x"), p.optInt("y")); break;
                 case "swipe": svc.swipe(p.optInt("x"), p.optInt("y"), p.optInt("x2"), p.optInt("y2"), p.optInt("duration", 300)); break;
@@ -242,6 +254,33 @@ public class ScreenCaptureService extends Service {
                 default: break;
             }
         }
+    }
+
+    private void launchApp(String pkg) {
+        if (pkg.isEmpty()) return;
+        try {
+            Intent i = getPackageManager().getLaunchIntentForPackage(pkg);
+            if (i == null) return; // uninstalled since the app list was fetched, or not launchable
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            startActivity(i);
+        } catch (Exception ignored) { }
+    }
+
+    /** The real ceiling of what a normal (non Device-Owner, non-root) app can
+     *  do to ANOTHER app's process on modern Android: there is no public API
+     *  for a true force-stop (that needs the signature-level
+     *  FORCE_STOP_PACKAGES permission, which only system/privileged apps get).
+     *  This is the same thing swiping an app off the Recents screen does —
+     *  send it to the background, then let the OS reclaim its now-cached
+     *  process — not a guaranteed kill for an app that's actively holding a
+     *  wakelock or running a foreground service of its own. */
+    private void closeApp(String pkg, PulseAccessibilityService svc) {
+        if (pkg.isEmpty()) return;
+        if (svc != null) svc.globalAction("home");
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            if (am != null) am.killBackgroundProcesses(pkg);
+        } catch (Exception ignored) { }
     }
 
     private JSONObject get(String urlStr, String token) throws IOException {

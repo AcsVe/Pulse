@@ -82,6 +82,11 @@ const permissions = [
   // a SecurityException that PulsePlugin used to swallow silently — the
   // "Ignore battery optimization" button would just do nothing when tapped.
   'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+  // Remote control's "close app": the only kill a normal (non system, non
+  // Device-Owner) app can do to another app's process — not a true
+  // force-stop, just what this permission already allows: killing another
+  // app's *cached/background* process, same effect as swiping it off Recents.
+  'android.permission.KILL_BACKGROUND_PROCESSES',
 ];
 for (const p of permissions) {
   const tag = `<uses-permission android:name="${p}" />`;
@@ -106,6 +111,23 @@ if (!manifest.includes('xmlns:tools=')) {
 // works fine in a browser (the OS cleartext block is per-app, not global).
 if (!manifest.includes('android:usesCleartextTraffic=')) {
   manifest = manifest.replace('<application', '<application\n        android:usesCleartextTraffic="true"');
+}
+
+// Android 11+ hides other apps' packages from PackageManager queries by
+// default (package visibility) unless declared here — needed for remote
+// control's "open app" list (queryIntentActivities for MAIN/LAUNCHER).
+// Scoped to launchable apps only, not the broader QUERY_ALL_PACKAGES
+// permission, since that's all this feature needs.
+if (!manifest.includes('<queries>')) {
+  const queriesBlock = `    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+`;
+  manifest = manifest.replace('<application', queriesBlock + '    <application');
 }
 
 // 4b. Wrap MainActivity's launcher intent-filter in a toggleable activity-alias,
