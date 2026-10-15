@@ -1076,39 +1076,39 @@ function paintStatic() {
 }
 // .top (the navy header bar) wraps onto a second line once its buttons
 // don't fit one row — a different point in ar vs en, and it shifts further
-// whenever a button is added/removed. .tabs and the table <th> row both
-// stick below it, so a hardcoded pixel offset for them drifts out of sync
-// and lets them render partly hidden behind the taller bar. This measures
-// the real rendered heights instead and republishes them as CSS variables
-// that app.css's sticky offsets read.
+// whenever a button is added/removed. .tabs sticks below it, so a
+// hardcoded pixel offset drifts out of sync and lets it render partly
+// hidden behind the taller bar. This measures the real rendered height
+// instead and republishes it as a CSS variable app.css's sticky offset reads.
+//
+// The table's own <th> row used to need a second variable (--th-top) for
+// the same reason, stacked on top of this one — but that was chasing the
+// wrong bug: .tw's `overflow-x:auto` makes its computed overflow-y `auto`
+// too (plain CSS axis-coupling, not something a pixel offset can fix),
+// which makes .tw — not the page — the sticky header's containing box. No
+// page-relative offset can ever be right in a box sized to its own content,
+// which is why the header kept drifting back to "landing mid-table" every
+// time this got re-tuned. app.css now gives .tw a real bounded height and
+// pins <th> to top:0 within it, so there's nothing left here to compute.
 function syncStickyOffsets() {
   const top = $('.top'); if (!top) return;
   const topH = Math.ceil(top.getBoundingClientRect().height);
-  const tabs = $('#tabs');
-  const tabsSticky = tabs && getComputedStyle(tabs).position === 'sticky';
-  const tabsH = tabsSticky ? Math.ceil(tabs.getBoundingClientRect().height) : 0;
-  const root = document.documentElement.style;
-  root.setProperty('--top-h', topH + 'px');
-  root.setProperty('--th-top', (topH + tabsH) + 'px');
+  document.documentElement.style.setProperty('--top-h', topH + 'px');
 }
 // syncStickyOffsets() used to only be called from a handful of spots (init,
-// language switch, window resize) — anything else that changes .top's or
-// #tabs's real height (a web font finishing its swap-in after first paint,
-// a tab's label going from one line to two, switching tabs, the 20s
-// auto-refresh re-rendering #main) left the old, now-wrong offset in place,
-// so the table header stuck at a stale pixel position and visually landed
-// in the middle of the rows instead of right below the bars. A
-// ResizeObserver tracks both bars directly — it fires on *any* real size
-// change, from whatever caused it, so the header offset can't go stale again.
+// language switch, window resize) — anything else that changes .top's real
+// height (a web font finishing its swap-in after first paint, a tab's label
+// going from one line to two) left the old, now-wrong offset in place. A
+// ResizeObserver tracks it directly — it fires on *any* real size change,
+// from whatever caused it, so the offset can't go stale again.
 let stickyRO = null;
 function watchStickyOffsets() {
-  const top = $('.top'), tabs = $('#tabs');
+  const top = $('.top');
   if (!top) return;
   if (!('ResizeObserver' in window)) { syncStickyOffsets(); return; }
   if (!stickyRO) stickyRO = new ResizeObserver(() => syncStickyOffsets());
   else stickyRO.disconnect();
   stickyRO.observe(top);
-  if (tabs) stickyRO.observe(tabs);
   syncStickyOffsets();
 }
 async function load() {

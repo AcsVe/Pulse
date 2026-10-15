@@ -80,18 +80,28 @@ svg text{font-family:inherit}
 .tbtn:hover{border-color:var(--teal)} .tbtn.danger{color:var(--bad);border-color:#f0c5c5} .tbtn[disabled]{opacity:.4;cursor:default}
 .selbar{display:none;align-items:center;gap:8px;background:#e8f7f5;border:1px solid #b9e6e1;border-radius:10px;padding:6px 12px;margin-bottom:10px;font-weight:700;font-size:.88rem}
 .selbar.on{display:flex}
-/* Was overflow:auto + max-height, which made .tw its own scroll container —
-   the sticky <th> below then stuck to the top of THAT scrollport, which is
-   only visible while scrolling inside the table itself. Scrolling the page
-   instead (the normal case once other cards push the table down) carried
-   the whole already-"stuck" table off past the fixed header/tabs bars, so
-   the header row appeared to vanish. Letting the table grow with the page
-   and sticking <th> to a fixed offset below those bars fixes it for real
-   page scrolling too. */
-.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
+/* The real, finally-root-caused bug behind every earlier "sticky header"
+   fix attempt: `overflow-x:auto` on its own forces the computed overflow-y
+   to `auto` too (that's CSS, not a bug in this file — a non-"visible" value
+   on one axis always promotes "visible" on the other to "auto"). So .tw was
+   ALWAYS its own scroll container, regardless of whether max-height was set,
+   which made it the sticky <th>'s containing block instead of the page. The
+   th's `top` offset (sized for the page's header+tabs bars) couldn't fit
+   inside .tw's own small box, so the browser clamped the header to the
+   bottom of that box — with the one data row rendered above it, looking
+   like an empty gap where the row should be, or like the header "landed"
+   mid-table on longer lists.
+   Embracing that coupling instead of fighting it: give .tw a real bounded
+   height so it's an intentional, correctly-functioning scroll area with its
+   header pinned to ITS OWN top (top:0 — no page-offset math needed at all
+   now, so it can't go stale again the way --th-top kept doing). Small
+   tables never show a scrollbar since content fits; longer ones (Browsing,
+   Network) scroll within the card, which stays below the page's own sticky
+   bars instead of competing with them for the same scroll. */
+.tw{overflow-x:auto;overflow-y:auto;max-height:min(68vh,680px);border:1px solid var(--line);border-radius:10px;background:#fff}
 table{border-collapse:separate;border-spacing:0;width:100%;font-size:.86rem}
 th,td{padding:9px 12px;text-align:start;white-space:nowrap;border-bottom:1px solid var(--line);background:#fff}
-th{position:sticky;top:var(--th-top,96px);z-index:3;background:#eaf2f6;cursor:pointer;user-select:none;font-weight:800;color:var(--navy)}
+th{position:sticky;top:0;z-index:3;background:#eaf2f6;cursor:pointer;user-select:none;font-weight:800;color:var(--navy)}
 th .si{opacity:.35;margin-inline-start:4px;font-size:.7rem} th.sorted .si{opacity:1;color:var(--teal-d)}
 td.fz,th.fz{position:sticky;z-index:2;background:#fff}
 th.fz{z-index:4;background:#eaf2f6}
@@ -173,7 +183,5 @@ body.kiosk svg text{fill:#bcd0de}
 @media (max-width:760px){
   .top{padding:8px 12px} .tabs{top:auto;position:static} main{padding:10px}
   .cols2{grid-template-columns:1fr}
-  /* th's --th-top is recomputed by JS (syncStickyOffsets) whenever this
-     media query flips — it sees .tabs is no longer position:sticky here
-     and offsets th by .top's height alone, so no separate rule is needed. */
+  .tw{max-height:min(72vh,560px)}
 }
