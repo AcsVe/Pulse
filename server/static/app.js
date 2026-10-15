@@ -68,6 +68,11 @@ const T = {
     remote:'تحكم عن بعد', remoteStart:'بدء التحكم عن بعد', remoteStop:'إيقاف', remoteWaiting:'بانتظار أول صورة من الهاتف…',
     remoteBack:'رجوع', remoteHome:'الرئيسية', remoteRecents:'الأخيرة', remoteSendText:'إرسال نص',
     remoteTextPh:'اكتب نصاً لإرساله إلى الحقل المُركَّز عليه في الهاتف', remoteHint:'انقر على الصورة للنقر على الهاتف. اسحب للتمرير.',
+    remoteZoomIn:'تكبير', remoteZoomOut:'تصغير', remoteClose:'إغلاق', remoteApps:'التطبيقات',
+    remoteAppsSearch:'ابحث عن تطبيق…', remoteAppsLoading:'جارٍ جلب قائمة التطبيقات من الهاتف…',
+    remoteAppsEmpty:'لا توجد تطبيقات — جرّب فتح لوحة التحكم مرة أخرى بعد قليل.', remoteAppsNone:'لا نتائج',
+    remoteLaunch:'فتح', remoteCloseApp:'إغلاق التطبيق',
+    remoteCloseHint:'"إغلاق" يُرجع الهاتف للشاشة الرئيسية ثم يوقف العملية الخلفية لذلك التطبيق — يماثل سحبه من قائمة الأخيرة، وليس إغلاقاً قسرياً مضموناً مثل زر النظام (لا تسمح أندرويد لأي تطبيق عادي بذلك).',
     remoteOffline:'لا يمكن التحكم عن بعد بجهاز غير متصل',
     users:'المستخدمون', addUser:'إضافة مستخدم', username:'اسم المستخدم', password:'كلمة المرور',
     role:'الصلاحية', roleSuperadmin:'مدير كامل', roleAdmin:'مدير', roleViewer:'مشاهد فقط',
@@ -129,6 +134,11 @@ const T = {
     remote:'Remote control', remoteStart:'Start remote control', remoteStop:'Stop', remoteWaiting:'Waiting for the first frame from the phone…',
     remoteBack:'Back', remoteHome:'Home', remoteRecents:'Recents', remoteSendText:'Send text',
     remoteTextPh:'Type text to send to the focused field on the phone', remoteHint:'Click the image to tap on the phone. Drag to swipe.',
+    remoteZoomIn:'Zoom in', remoteZoomOut:'Zoom out', remoteClose:'Close', remoteApps:'Apps',
+    remoteAppsSearch:'Search for an app…', remoteAppsLoading:'Fetching the app list from the phone…',
+    remoteAppsEmpty:'No apps yet — try reopening remote control in a moment.', remoteAppsNone:'No matches',
+    remoteLaunch:'Open', remoteCloseApp:'Close app',
+    remoteCloseHint:'"Close" sends the phone home then kills that app\'s background process — the same as swiping it off Recents, not a guaranteed force-stop like the system Settings button (no normal app is allowed to do that on Android).',
     remoteOffline:"Can't remote-control an offline device",
     users:'Users', addUser:'Add user', username:'Username', password:'Password',
     role:'Role', roleSuperadmin:'Full admin', roleAdmin:'Admin', roleViewer:'Viewer only',
@@ -878,23 +888,35 @@ async function renderUsers() {
 // ── remote screen view + control ────────────────────────────────────────
 const RC = { id: null, timer: null, w: 0, h: 0, drag: null };
 function openRemotePanel(id, name) {
-  RC.id = id; RC.w = 0; RC.h = 0; RC.drag = null;
+  RC.id = id; RC.w = 0; RC.h = 0; RC.drag = null; RC.apps = null; RC.appsTries = 0;
   const dev = (S.allDevices || []).find(x => String(x.id) === String(id));
   const modal = $('#remoteModal');
   modal.innerHTML = `
     <div class="remote-box">
-      <div class="remote-head"><h3>${esc(t('remote'))} — ${esc(name)}</h3><button class="tbtn" id="rcClose">✕</button></div>
+      <div class="remote-head">
+        <h3>${esc(t('remote'))} — ${esc(name)}</h3>
+        <div class="remote-head-actions">
+          <button class="rcicon" id="rcAppsBtn" title="${esc(t('remoteApps'))}">⊞</button>
+          <button class="rcicon" id="rcClose" title="${esc(t('remoteClose'))}">✕</button>
+        </div>
+      </div>
       ${dev && dev.accessibilityEnabled === false ? `<div class="remote-warn">${esc(t('accessibilityWarn'))}</div>` : ''}
       <div class="remote-screen-wrap">
         <div class="remote-wait" id="rcWait">${esc(t('remoteWaiting'))}</div>
         <img id="rcImg" hidden>
       </div>
-      <div class="remote-controls">
-        <button class="tbtn" id="rcZoomOut">－</button>
-        <button class="tbtn" id="rcZoomIn">＋</button>
-        <button class="tbtn" id="rcBack">⟲ ${esc(t('remoteBack'))}</button>
-        <button class="tbtn" id="rcHome">⌂ ${esc(t('remoteHome'))}</button>
-        <button class="tbtn" id="rcRecents">▭ ${esc(t('remoteRecents'))}</button>
+      <div class="remote-apps-panel hidden" id="rcAppsPanel">
+        <input id="rcAppsSearch" placeholder="${esc(t('remoteAppsSearch'))}">
+        <div class="remote-apps-list" id="rcAppsList"><div class="remote-apps-msg">${esc(t('remoteAppsLoading'))}</div></div>
+        <div class="remote-hint">${esc(t('remoteCloseHint'))}</div>
+      </div>
+      <div class="remote-toolbar">
+        <button class="rcicon" id="rcZoomOut" title="${esc(t('remoteZoomOut'))}">－</button>
+        <button class="rcicon" id="rcZoomIn" title="${esc(t('remoteZoomIn'))}">＋</button>
+        <span class="rcsep"></span>
+        <button class="rcicon" id="rcBack" title="${esc(t('remoteBack'))}">⟲</button>
+        <button class="rcicon" id="rcHome" title="${esc(t('remoteHome'))}">⌂</button>
+        <button class="rcicon" id="rcRecents" title="${esc(t('remoteRecents'))}">▭</button>
       </div>
       <div class="remote-text">
         <input id="rcText" placeholder="${esc(t('remoteTextPh'))}">
@@ -911,6 +933,12 @@ function openRemotePanel(id, name) {
   $('#rcBack').onclick = () => remoteCmd({ action: 'back' });
   $('#rcHome').onclick = () => remoteCmd({ action: 'home' });
   $('#rcRecents').onclick = () => remoteCmd({ action: 'recents' });
+  $('#rcAppsBtn').onclick = () => {
+    const panel = $('#rcAppsPanel');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) loadRemoteApps();
+  };
+  $('#rcAppsSearch').oninput = () => renderRemoteApps();
   $('#rcSendText').onclick = () => {
     const v = $('#rcText').value; if (!v) return;
     remoteCmd({ action: 'text', text: v }); $('#rcText').value = '';
@@ -940,7 +968,7 @@ function openRemotePanel(id, name) {
   };
   jpost(`/api/devices/${id}/remote/start`, {}, 'POST');
   tickRemoteFrame();
-  RC.timer = setInterval(tickRemoteFrame, 500);
+  RC.timer = setInterval(tickRemoteFrame, 300);
 }
 async function tickRemoteFrame() {
   if (!RC.id) return;
@@ -954,6 +982,41 @@ async function tickRemoteFrame() {
 function remoteCmd(body) {
   if (!RC.id) return;
   jpost(`/api/devices/${RC.id}/remote/command`, body, 'POST');
+}
+// The phone only uploads its app list on-demand, the first time this remote
+// session asks for it (server's /api/v1/remote-state tells it to) — so the
+// first fetch here often arrives before that upload lands. Retry a few times
+// a couple seconds apart instead of showing "no apps" on the first miss.
+async function loadRemoteApps() {
+  if (!RC.id) return;
+  const id = RC.id;
+  try {
+    const r = await api(`/api/devices/${id}/apps`);
+    if (String(RC.id) !== String(id)) return; // panel was closed/switched meanwhile
+    if ((!r.apps || !r.apps.length) && RC.appsTries < 6) {
+      RC.appsTries++;
+      setTimeout(loadRemoteApps, 2000);
+      return;
+    }
+    RC.apps = r.apps || [];
+    renderRemoteApps();
+  } catch (e) { /* leave the loading message; next open will retry */ }
+}
+function renderRemoteApps() {
+  const list = $('#rcAppsList'); if (!list) return;
+  if (RC.apps == null) { list.innerHTML = `<div class="remote-apps-msg">${esc(t('remoteAppsLoading'))}</div>`; return; }
+  if (!RC.apps.length) { list.innerHTML = `<div class="remote-apps-msg">${esc(t('remoteAppsEmpty'))}</div>`; return; }
+  const q = ($('#rcAppsSearch').value || '').trim().toLowerCase();
+  const rows = q ? RC.apps.filter(a => a.label.toLowerCase().includes(q) || a.pkg.toLowerCase().includes(q)) : RC.apps;
+  const sorted = rows.slice().sort((a, b) => a.label.localeCompare(b.label));
+  list.innerHTML = sorted.length ? sorted.map(a => `
+    <div class="remote-app-row">
+      <span class="remote-app-label" title="${esc(a.pkg)}">${esc(a.label)}</span>
+      <button class="rcicon sm" data-launch="${esc(a.pkg)}" title="${esc(t('remoteLaunch'))}">▶</button>
+      <button class="rcicon sm danger" data-close="${esc(a.pkg)}" title="${esc(t('remoteCloseApp'))}">⏻</button>
+    </div>`).join('') : `<div class="remote-apps-msg">${esc(t('remoteAppsNone'))}</div>`;
+  list.querySelectorAll('[data-launch]').forEach(b => b.onclick = () => remoteCmd({ action: 'launch', pkg: b.dataset.launch }));
+  list.querySelectorAll('[data-close]').forEach(b => b.onclick = () => { if (confirm(t('remoteCloseApp') + '?')) remoteCmd({ action: 'close', pkg: b.dataset.close }); });
 }
 function closeRemotePanel() {
   if (RC.timer) clearInterval(RC.timer);

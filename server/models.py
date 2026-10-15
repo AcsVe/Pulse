@@ -39,6 +39,8 @@ class Device(db.Model):
     remote_screen_h = db.Column(db.Integer)
     remote_frame_at = db.Column(db.BigInteger)                 # ms epoch of the last frame received
     poll_interval_s = db.Column(db.Integer, default=60)        # device-configurable "realtime" cadence
+    apps_json       = db.Column(db.Text)                       # cached [{pkg,label}] for the remote "open app" picker
+    apps_at         = db.Column(db.BigInteger)                 # ms epoch the device last reported its app list
 
     @staticmethod
     def new_enroll_code():

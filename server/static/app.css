@@ -137,18 +137,39 @@ body.kiosk svg text{fill:#bcd0de}
 /* remote control modal */
 .modal-wrap{position:fixed;inset:0;background:rgba(10,22,36,.72);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
 .modal-wrap[hidden]{display:none}
-.remote-box{background:#10222f;border-radius:14px;padding:16px;max-width:420px;width:100%;color:#e9f2f8;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+/* Was max-width:420px — far narrower than the modal-wrap had room for on any
+   normal screen, so the actual phone-screen view rendered small even though
+   plenty of space was available around it. Now scales with the viewport. */
+.remote-box{background:#10222f;border-radius:14px;padding:16px;max-width:min(94vw,860px);width:100%;color:#e9f2f8;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .remote-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
 .remote-head h3{font-size:1rem;color:#fff}
-.remote-screen-wrap{position:relative;background:#000;border-radius:10px;overflow:auto;display:flex;align-items:center;justify-content:center;min-height:200px;max-height:60vh}
-.remote-screen-wrap img{max-width:100%;max-height:60vh;display:block;cursor:crosshair;user-select:none;-webkit-user-drag:none;transition:transform .15s;transform-origin:center top}
+.remote-head-actions{display:flex;gap:6px}
+.remote-screen-wrap{position:relative;background:#000;border-radius:10px;overflow:auto;display:flex;align-items:center;justify-content:center;min-height:240px;max-height:78vh}
+.remote-screen-wrap img{max-width:100%;max-height:78vh;display:block;cursor:crosshair;user-select:none;-webkit-user-drag:none;transition:transform .15s;transform-origin:center top}
 .remote-warn{background:#4a2f12;color:#ffd79a;border:1px solid #7a5a22;border-radius:8px;padding:8px 12px;font-size:.82rem;margin-bottom:10px}
 .remote-wait{color:#9db6c9;padding:40px 10px;text-align:center;font-size:.88rem}
-.remote-controls{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
-.remote-controls .tbtn{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)}
+/* Icon-only toolbar (was text buttons: "⟲ رجوع", "⌂ الرئيسية"...) — tooltip
+   via title carries the label instead, for a cleaner, denser control row. */
+.remote-toolbar{display:flex;align-items:center;gap:6px;margin-top:12px;flex-wrap:wrap}
+.rcsep{width:1px;align-self:stretch;background:rgba(255,255,255,.15);margin:0 4px}
+.rcicon{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:9px;
+  width:40px;height:40px;font-size:1.05rem;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.rcicon:hover{background:rgba(255,255,255,.2)}
+.rcicon.sm{width:30px;height:30px;font-size:.85rem;flex:none}
+.rcicon.danger{color:#ffb4a8}
+.rcicon.danger:hover{background:rgba(214,69,69,.35)}
 .remote-text{display:flex;gap:8px;margin-top:10px}
 .remote-text input{flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff}
 .remote-hint{font-size:.76rem;color:#9db6c9;margin-top:8px}
+/* "Apps" panel (open/close), toggled by the ⊞ header icon */
+.remote-apps-panel{margin-top:10px;padding:10px;border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.04)}
+.remote-apps-panel.hidden{display:none}
+.remote-apps-panel input{width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;margin-bottom:8px}
+.remote-apps-list{max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+.remote-apps-msg{color:#9db6c9;font-size:.82rem;padding:10px 4px;text-align:center}
+.remote-app-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px}
+.remote-app-row:hover{background:rgba(255,255,255,.06)}
+.remote-app-label{flex:1;font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:760px){
   .top{padding:8px 12px} .tabs{top:auto;position:static} main{padding:10px}
   .cols2{grid-template-columns:1fr}

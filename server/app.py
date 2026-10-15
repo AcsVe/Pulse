@@ -61,6 +61,8 @@ def create_app(test_config=None):
             'connection_type': 'VARCHAR(20)',
             'accessibility_enabled': 'BOOLEAN',
             'wifi_band': 'VARCHAR(10)',
+            'apps_json': 'TEXT',
+            'apps_at': 'BIGINT',
         })
         if not db.session.get(EmailSettings, 1):
             db.session.add(EmailSettings(id=1))
@@ -710,7 +712,50 @@ def create_app(test_config=None):
         # goes stale and the dashboard wrongly shows it "Offline".
         dev.last_seen = now_ms()
         db.session.commit()
-        return jsonify({'active': bool(dev.remote_active), 'pollIntervalS': dev.poll_interval_s or 60})
+        # needApps tells the device whether to also (re-)upload its installed
+        # app list this session — only while remote control is actually
+        # active, and not on every single poll: once per fresh session, or
+        # if what we have is old enough it's probably stale (apps installed/
+        # removed since).
+        need_apps = bool(dev.remote_active) and (not dev.apps_at or now_ms() - dev.apps_at > 30 * 60 * 1000)
+        return jsonify({'active': bool(dev.remote_active), 'pollIntervalS': dev.poll_interval_s or 60, 'needApps': need_apps})
+
+    @app.route('/api/v1/apps', methods=['POST'])
+    def apps_upload():
+        dev = device_from_token()
+        if not dev:
+            return jsonify({'error': 'unauthorized'}), 401
+        data = request.get_json(silent=True) or {}
+        apps = data.get('apps')
+        if not isinstance(apps, list):
+            return jsonify({'error': 'bad_payload'}), 400
+        # Cap both the list size and each field's length — this comes from
+        # PackageManager on the device, not something adversarial, but it's
+        # still unauthenticated-by-content input landing in a TEXT column.
+        cleaned = []
+        for a in apps[:600]:
+            if not isinstance(a, dict):
+                continue
+            pkg = str(a.get('pkg') or '')[:150]
+            label = str(a.get('label') or '')[:150]
+            if pkg:
+                cleaned.append({'pkg': pkg, 'label': label or pkg})
+        dev.apps_json = json.dumps(cleaned)
+        dev.apps_at = now_ms()
+        db.session.commit()
+        return jsonify({'ok': True, 'count': len(cleaned)})
+
+    @app.route('/api/devices/<int:did>/apps', methods=['GET'])
+    @viewer_device_required
+    def apps_list(did):
+        d = db.session.get(Device, did)
+        if not d:
+            return jsonify({'error': 'not_found'}), 404
+        try:
+            apps = json.loads(d.apps_json) if d.apps_json else []
+        except (TypeError, ValueError):
+            apps = []
+        return jsonify({'apps': apps, 'appsAt': d.apps_at})
 
     @app.route('/api/v1/screen', methods=['POST'])
     def screen_upload():
@@ -784,9 +829,11 @@ def create_app(test_config=None):
             return jsonify({'error': 'not_active'}), 400
         data = request.get_json(silent=True) or {}
         action = (data.get('action') or '').strip()
-        if action not in ('tap', 'swipe', 'text', 'back', 'home', 'recents'):
+        if action not in ('tap', 'swipe', 'text', 'back', 'home', 'recents', 'launch', 'close'):
             return jsonify({'error': 'bad_action'}), 400
-        params = {k: data[k] for k in ('x', 'y', 'x2', 'y2', 'duration', 'text') if k in data}
+        if action in ('launch', 'close') and not (data.get('pkg') or '').strip():
+            return jsonify({'error': 'pkg_required'}), 400
+        params = {k: data[k] for k in ('x', 'y', 'x2', 'y2', 'duration', 'text', 'pkg') if k in data}
         # Keep the queue from piling up if the dashboard sends faster than the
         # device can poll — commands are discrete UI actions, so only the
         # newest handful matter.
