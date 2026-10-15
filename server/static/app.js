@@ -212,9 +212,14 @@ function toast(msg) { const e = $('#toast'); e.textContent = msg; e.classList.ad
 
 // ── charts (hand-rolled SVG) ──────────────────────────────────────────────
 function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / p) * p; }
-function barChart(cur, prev, { h = 190, unit = 'ms' } = {}) {
+function barChart(cur, prev, { h = 210, unit = 'ms' } = {}) {
   const n = cur.length; if (!n) return `<div class="empty">${t('noData')}</div>`;
-  const W = 760, padL = 46, padB = 24, padT = 8, innerW = W - padL - 6, innerH = h - padB - padT;
+  // W is deliberately smaller than the typical card width (not 1:1 with
+  // pixels): the SVG scales to fill its container via viewBox, and that
+  // same scale factor applies to font-size, so a narrower W means more
+  // pixels per chart unit — i.e. bigger, readable axis text — even when
+  // this chart lands in the 2-column grid at ~380-450px wide.
+  const W = 560, padL = 54, padB = 26, padT = 8, innerW = W - padL - 6, innerH = h - padB - padT;
   const vals = cur.map(d => d.v).concat((prev || []).map(d => d.v));
   const max = niceMax(Math.max(1, ...vals));
   const slot = innerW / n, bw = Math.max(2, Math.min(34, slot * 0.62));
@@ -224,7 +229,7 @@ function barChart(cur, prev, { h = 190, unit = 'ms' } = {}) {
   for (let i = 0; i <= 4; i++) {
     const y = padT + innerH - innerH * i / 4, val = max * i / 4;
     g += `<line x1="${padL}" x2="${W-6}" y1="${y}" y2="${y}" stroke="#d6e1e9" stroke-dasharray="3 4" opacity=".7"/>`;
-    g += `<text x="${rtl ? W - 0 : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="15">${esc(fmtVal(val, unit))}</text>`;
+    g += `<text x="${rtl ? W - 0 : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="22">${esc(fmtVal(val, unit))}</text>`;
   }
   cur.forEach((d, i) => {
     const bh = innerH * d.v / max, x = X(i);
@@ -233,14 +238,14 @@ function barChart(cur, prev, { h = 190, unit = 'ms' } = {}) {
       g += `<rect x="${x - bw/2 - 3}" y="${padT + innerH - ph}" width="${bw}" height="${ph}" rx="2" fill="#aebfcc" opacity=".8"><title>${esc(prev[i].label)} — ${esc(fmtVal(prev[i].v, unit))}</title></rect>`;
     }
     g += `<rect x="${x - bw/2 + (prev ? 3 : 0)}" y="${padT + innerH - bh}" width="${bw}" height="${Math.max(0, bh)}" rx="2" fill="var(--teal)"><title>${esc(d.label)} — ${esc(fmtVal(d.v, unit))}</title></rect>`;
-    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${x}" y="${h - 6}" text-anchor="middle" font-size="15">${esc(d.short)}</text>`;
+    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${x}" y="${h - 6}" text-anchor="middle" font-size="22">${esc(d.short)}</text>`;
   });
   return `<svg viewBox="0 0 ${W} ${h}" width="100%" role="img">${g}</svg>`;
 }
 function stackedChart(days) {
   const n = days.length; if (!n) return `<div class="empty">${t('noData')}</div>`;
   const rows = days.map(d => ({ label: d.day, short: d.day.slice(5), parts: ['no_internet','failed','disconnected'].map(k => ({ k, v: d.net[k] / 60000 })) }));
-  const W = 760, h = 190, padL = 46, padB = 24, padT = 8, innerW = W - padL - 6, innerH = h - padB - padT;
+  const W = 560, h = 210, padL = 54, padB = 26, padT = 8, innerW = W - padL - 6, innerH = h - padB - padT;
   const max = niceMax(Math.max(1, ...rows.map(r => r.parts.reduce((a, p) => a + p.v, 0))));
   const slot = innerW / n, bw = Math.max(2, Math.min(34, slot * 0.62));
   const rtl = document.documentElement.dir === 'rtl';
@@ -249,7 +254,7 @@ function stackedChart(days) {
   for (let i = 0; i <= 4; i++) {
     const y = padT + innerH - innerH * i / 4;
     g += `<line x1="${padL}" x2="${W-6}" y1="${y}" y2="${y}" stroke="#d6e1e9" stroke-dasharray="3 4" opacity=".7"/>`;
-    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="15">${Math.round(max * i / 4)}</text>`;
+    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="22">${Math.round(max * i / 4)}</text>`;
   }
   rows.forEach((r, i) => {
     let y = padT + innerH;
@@ -257,7 +262,7 @@ function stackedChart(days) {
       const bh = innerH * p.v / max; y -= bh;
       if (bh > 0) g += `<rect x="${X(i) - bw/2}" y="${y}" width="${bw}" height="${bh}" fill="${KIND_COLOR[p.k]}"><title>${esc(r.label)} — ${esc(t(p.k))}: ${Math.round(p.v)}${t('m')}</title></rect>`;
     });
-    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${X(i)}" y="${h - 6}" text-anchor="middle" font-size="15">${esc(r.short)}</text>`;
+    if (n <= 16 || i % Math.ceil(n / 14) === 0) g += `<text x="${X(i)}" y="${h - 6}" text-anchor="middle" font-size="22">${esc(r.short)}</text>`;
   });
   const legend = ['no_internet','failed','disconnected'].map(k => `<span><i style="background:${KIND_COLOR[k]}"></i>${esc(t(k))}</span>`).join('');
   return `<svg viewBox="0 0 ${W} ${h}" width="100%" role="img">${g}</svg><div class="legend">${legend}</div>`;
@@ -526,7 +531,12 @@ async function renderBrowse() {
   const rows = await api('/api/table/browse?' + qs());
   $('#main').innerHTML = '<div class="card" id="tbl"></div>';
   makeTable($('#tbl'), { id: 'browse', id_: 'id', rows, sortKey: 'ts', deletable: 'browse', reload: renderBrowse, freeze: 1, cols: [
-    { k: 'domain', label: t('domain'), w: 200, html: x => linkify(x.domain, x.url), text: x => x.domain },
+    // DNS-sourced rows only ever capture the domain being looked up, never
+    // a full URL (the device can see a DNS query, not the page it was
+    // for) — falling back to the bare domain as the link target still
+    // makes every row clickable instead of only the accessibility-sourced
+    // ones that happen to have a full url.
+    { k: 'domain', label: t('domain'), w: 200, html: x => linkify(x.domain, x.url || x.domain), text: x => x.domain },
     { k: 'ts', label: t('date'), fmt: fmtTs, w: 150 },
     { k: 'title', label: t('title'), wrap: true, w: 220 },
     { k: 'url', label: t('url'), wrap: true, w: 300, html: x => linkify(x.url, x.url), text: x => x.url },
@@ -999,6 +1009,24 @@ function paintStatic() {
   $('#exportPdfBtn').textContent = t('exportPdf');
   const lo = $('#logoutBtn'); if (lo) lo.textContent = t('logout');
   renderChips(); renderTabs(); renderDevPop();
+  syncStickyOffsets();
+}
+// .top (the navy header bar) wraps onto a second line once its buttons
+// don't fit one row — a different point in ar vs en, and it shifts further
+// whenever a button is added/removed. .tabs and the table <th> row both
+// stick below it, so a hardcoded pixel offset for them drifts out of sync
+// and lets them render partly hidden behind the taller bar. This measures
+// the real rendered heights instead and republishes them as CSS variables
+// that app.css's sticky offsets read.
+function syncStickyOffsets() {
+  const top = $('.top'); if (!top) return;
+  const topH = Math.ceil(top.getBoundingClientRect().height);
+  const tabs = $('#tabs');
+  const tabsSticky = tabs && getComputedStyle(tabs).position === 'sticky';
+  const tabsH = tabsSticky ? Math.ceil(tabs.getBoundingClientRect().height) : 0;
+  const root = document.documentElement.style;
+  root.setProperty('--top-h', topH + 'px');
+  root.setProperty('--th-top', (topH + tabsH) + 'px');
 }
 async function load() {
   try {
@@ -1038,6 +1066,11 @@ async function init() {
     // open (a refresh there would interrupt the live screen feed).
     setInterval(() => { if (!document.hidden && !RC.id) load(); }, 20000);
   }
+  // Re-measure on resize/orientation change (debounced) — window width
+  // changes how many header buttons fit per row, and crossing the 760px
+  // breakpoint takes .tabs in and out of the sticky stack entirely.
+  let roTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(roTimer); roTimer = setTimeout(syncStickyOffsets, 150); });
   load();
 }
 init();

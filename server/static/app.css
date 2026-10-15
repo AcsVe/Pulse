@@ -35,7 +35,13 @@ button,input,select{font:inherit;color:inherit}
 .popbody .btn{background:var(--navy);color:#fff}
 .popbody .btn:hover{background:var(--navy2)}
 .kioskinfo{display:none}
-.tabs{display:flex;gap:4px;background:#fff;padding:0 14px;border-bottom:1px solid var(--line);overflow-x:auto;position:sticky;top:52px;z-index:25}
+/* top offsets are set from JS (syncStickyOffsets) to the real measured
+   height of .top, which varies — it wraps onto a second line once enough
+   header buttons don't fit one row (a different count in ar/en, and now
+   one button taller with the PDF export button added). A hardcoded guess
+   here drifted out of sync with that and let .tabs render partly behind
+   the taller .top bar when scrolling, looking like it "disappeared". */
+.tabs{display:flex;gap:4px;background:#fff;padding:0 14px;border-bottom:1px solid var(--line);overflow-x:auto;position:sticky;top:var(--top-h,52px);z-index:25}
 .tab{border:0;background:none;padding:12px 16px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
 .tab.on{color:var(--navy);border-bottom-color:var(--teal)}
 .tab .cnt{background:#e8f0f5;border-radius:10px;padding:1px 8px;font-size:.75rem;margin-inline-start:6px}
@@ -85,7 +91,7 @@ svg text{font-family:inherit}
 .tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
 table{border-collapse:separate;border-spacing:0;width:100%;font-size:.86rem}
 th,td{padding:9px 12px;text-align:start;white-space:nowrap;border-bottom:1px solid var(--line);background:#fff}
-th{position:sticky;top:96px;z-index:3;background:#eaf2f6;cursor:pointer;user-select:none;font-weight:800;color:var(--navy)}
+th{position:sticky;top:var(--th-top,96px);z-index:3;background:#eaf2f6;cursor:pointer;user-select:none;font-weight:800;color:var(--navy)}
 th .si{opacity:.35;margin-inline-start:4px;font-size:.7rem} th.sorted .si{opacity:1;color:var(--teal-d)}
 td.fz,th.fz{position:sticky;z-index:2;background:#fff}
 th.fz{z-index:4;background:#eaf2f6}
@@ -146,7 +152,7 @@ body.kiosk svg text{fill:#bcd0de}
 @media (max-width:760px){
   .top{padding:8px 12px} .tabs{top:auto;position:static} main{padding:10px}
   .cols2{grid-template-columns:1fr}
-  /* .tabs is no longer sticky on mobile (it scrolls away with the page), so
-     the table header only needs to clear the top brand bar, not both. */
-  th{top:44px}
+  /* th's --th-top is recomputed by JS (syncStickyOffsets) whenever this
+     media query flips — it sees .tabs is no longer position:sticky here
+     and offsets th by .top's height alone, so no separate rule is needed. */
 }

@@ -13,6 +13,9 @@
   h2{font-size:1.1rem;color:var(--navy);border-bottom:2px solid var(--teal);padding-bottom:6px;margin:28px 0 10px}
   table{width:100%;border-collapse:collapse;font-size:.86rem;margin-bottom:6px}
   th,td{padding:7px 10px;text-align:start;border-bottom:1px solid var(--line)}
+  table a{color:var(--teal);text-decoration:none}
+  table a:hover{text-decoration:underline}
+  @media print{ table a{color:inherit;text-decoration:underline} }
   th{background:#eaf2f6;color:var(--navy);font-weight:800}
   tr:nth-child(even) td{background:#fafcfd}
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -63,14 +66,14 @@
   <h2>المواقع الأكثر زيارة</h2>
   {% if ov.topDomains %}
   <table><tr><th>الموقع</th><th>عدد الزيارات</th></tr>
-    {% for d in ov.topDomains %}<tr><td dir="ltr" style="text-align:end">{{ d.domain }}</td><td>{{ d.count }}</td></tr>{% endfor %}
+    {% for d in ov.topDomains %}<tr><td dir="ltr" style="text-align:end"><a href="https://{{ d.domain }}" target="_blank" rel="noopener noreferrer">{{ d.domain }}</a></td><td>{{ d.count }}</td></tr>{% endfor %}
   </table>
   {% else %}<div class="empty">لا توجد بيانات</div>{% endif %}
 
   <h2>سجل التصفح (آخر {{ browse_rows|length }} عنصر)</h2>
   {% if browse_rows %}
   <table><tr><th>الوقت</th><th>الجهاز</th><th>الموقع</th><th>العنوان</th></tr>
-    {% for r in browse_rows %}<tr><td>{{ r.ts }}</td><td>{{ r.device }}</td><td dir="ltr" style="text-align:end">{{ r.domain }}</td><td>{{ r.title }}</td></tr>{% endfor %}
+    {% for r in browse_rows %}<tr><td>{{ r.ts }}</td><td>{{ r.device }}</td><td dir="ltr" style="text-align:end"><a href="{{ r.url if r.url else 'https://' ~ r.domain }}" target="_blank" rel="noopener noreferrer">{{ r.domain }}</a></td><td>{{ r.title }}</td></tr>{% endfor %}
   </table>
   {% else %}<div class="empty">لا توجد بيانات</div>{% endif %}
 
