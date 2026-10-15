@@ -1072,7 +1072,7 @@ function paintStatic() {
   $('#exportPdfBtn').textContent = t('exportPdf');
   const lo = $('#logoutBtn'); if (lo) lo.textContent = t('logout');
   renderChips(); renderTabs(); renderDevPop();
-  syncStickyOffsets();
+  watchStickyOffsets();
 }
 // .top (the navy header bar) wraps onto a second line once its buttons
 // don't fit one row — a different point in ar vs en, and it shifts further
@@ -1090,6 +1090,26 @@ function syncStickyOffsets() {
   const root = document.documentElement.style;
   root.setProperty('--top-h', topH + 'px');
   root.setProperty('--th-top', (topH + tabsH) + 'px');
+}
+// syncStickyOffsets() used to only be called from a handful of spots (init,
+// language switch, window resize) — anything else that changes .top's or
+// #tabs's real height (a web font finishing its swap-in after first paint,
+// a tab's label going from one line to two, switching tabs, the 20s
+// auto-refresh re-rendering #main) left the old, now-wrong offset in place,
+// so the table header stuck at a stale pixel position and visually landed
+// in the middle of the rows instead of right below the bars. A
+// ResizeObserver tracks both bars directly — it fires on *any* real size
+// change, from whatever caused it, so the header offset can't go stale again.
+let stickyRO = null;
+function watchStickyOffsets() {
+  const top = $('.top'), tabs = $('#tabs');
+  if (!top) return;
+  if (!('ResizeObserver' in window)) { syncStickyOffsets(); return; }
+  if (!stickyRO) stickyRO = new ResizeObserver(() => syncStickyOffsets());
+  else stickyRO.disconnect();
+  stickyRO.observe(top);
+  if (tabs) stickyRO.observe(tabs);
+  syncStickyOffsets();
 }
 async function load() {
   try {
