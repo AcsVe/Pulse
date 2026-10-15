@@ -160,9 +160,20 @@ public class Uploader {
     }
 
     public static void requestImmediateSync(Context ctx) {
+        // Plain startService() silently throws (and was being swallowed
+        // below) if CollectorService isn't already alive and this call
+        // isn't considered a foreground-triggered start by Android O+ —
+        // the exact situation right after a reboot or if the background
+        // service died and hasn't been restarted yet. Mirror start()'s own
+        // startForegroundService path so "sync now" also works then,
+        // instead of silently doing nothing and leaving the button looking
+        // unresponsive.
         Intent i = new Intent(ctx, CollectorService.class);
         i.setAction(CollectorService.ACTION_SYNC_NOW);
-        try { ctx.startService(i); } catch (Exception ignored) { }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i);
+            else ctx.startService(i);
+        } catch (Exception ignored) { }
     }
 
     private static JSONObject post(String urlStr, JSONObject body, String bearer) throws IOException {

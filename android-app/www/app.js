@@ -7,7 +7,7 @@ const T = {
     relink: 'تحديث رمز الربط', relinkHint: 'استخدم هذا لتحديث رمز الربط بعد توليد رمز جديد من لوحة التحكم — بلا حذف أو إعادة تثبيت التطبيق.',
     permsTitle: 'الأذونات المطلوبة', permsHint: 'امنح كل إذن لتعمل كل الميزات بشكل صحيح', start: 'بدء المراقبة',
     runningTitle: 'المراقبة تعمل', device: 'الجهاز', server: 'الخادم', lastSync: 'آخر مزامنة', queued: 'بانتظار الإرسال',
-    syncNow: 'مزامنة الآن', checkPerms: 'إعادة فحص الأذونات', stop: 'إيقاف المراقبة',
+    syncNow: 'مزامنة الآن', syncing: 'جارٍ المزامنة...', checkPerms: 'إعادة فحص الأذونات', stop: 'إيقاف المراقبة',
     hideIcon: 'إخفاء الأيقونة', showIconBtn: 'إظهار الأيقونة',
     iconHint: 'يبقى إشعار التشغيل ظاهراً دائماً (يفرضه نظام أندرويد) — اضغط عليه في أي وقت لإعادة إظهار الأيقونة وفتح التطبيق.',
     hideConfirm: 'ستختفي أيقونة التطبيق من قائمة التطبيقات. للعودة إليه لاحقاً: اضغط على إشعار "Pulse" الثابت في شريط الإشعارات. متابعة؟',
@@ -34,7 +34,7 @@ const T = {
     relink: 'Update linking code', relinkHint: 'Use this to update the linking code after generating a new one from the dashboard — no need to uninstall or reinstall the app.',
     permsTitle: 'Required permissions', permsHint: 'Grant each permission so every feature works correctly', start: 'Start monitoring',
     runningTitle: 'Monitoring is running', device: 'Device', server: 'Server', lastSync: 'Last sync', queued: 'Queued',
-    syncNow: 'Sync now', checkPerms: 'Recheck permissions', stop: 'Stop monitoring',
+    syncNow: 'Sync now', syncing: 'Syncing...', checkPerms: 'Recheck permissions', stop: 'Stop monitoring',
     hideIcon: 'Hide app icon', showIconBtn: 'Show app icon',
     iconHint: 'The running notification always stays visible (required by Android) — tap it any time to bring the icon back and reopen the app.',
     hideConfirm: 'The app icon will disappear from your app list. To get back in later: tap the persistent "Pulse" notification. Continue?',
@@ -226,7 +226,21 @@ async function init() {
     else { if (!confirm(t('hideConfirm'))) return; await p.hideIcon(); }
     refreshStatus();
   };
-  $('#syncNowBtn').onclick = async () => { const p = Pulse(); if (p) { await p.syncNow(); setTimeout(refreshStatus, 1200); } };
+  $('#syncNowBtn').onclick = async () => {
+    const p = Pulse(); if (!p) return;
+    // The button previously gave no feedback at all — it called syncNow()
+    // and silently waited 1.2s before refreshing, so a slower network
+    // round trip (or a swallowed native-side failure) looked identical to
+    // the button doing nothing. Now it visibly disables/relabels itself
+    // immediately, and polls refreshStatus a few times over several
+    // seconds instead of trusting one fixed 1.2s delay.
+    const btn = $('#syncNowBtn');
+    btn.disabled = true; const label = btn.textContent; btn.textContent = t('syncing');
+    try { await p.syncNow(); } finally {
+      [800, 2000, 4000].forEach(ms => setTimeout(refreshStatus, ms));
+      setTimeout(() => { btn.disabled = false; btn.textContent = label; }, 2200);
+    }
+  };
   $('#remoteBtn').onclick = async () => {
     const p = Pulse(); if (!p) return;
     const on = $('#remoteBtn').dataset.on === '1';
