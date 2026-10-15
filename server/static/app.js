@@ -66,6 +66,7 @@ const T = {
     edit:'تعديل', add:'إضافة', update:'تحديث', nameCol:'الاسم', timeCol:'الوقت', statusCol:'الحالة',
     on_:'مفعّلة', off_:'متوقفة', mon:'إثنين', tue:'ثلاثاء', wed:'أربعاء', thu:'خميس', fri:'جمعة', sat:'سبت', sun:'أحد',
     remote:'تحكم عن بعد', remoteStart:'بدء التحكم عن بعد', remoteStop:'إيقاف', remoteWaiting:'بانتظار أول صورة من الهاتف…',
+    remoteLost:'انقطع الاتصال بالهاتف — تأكد أنه متصل بالإنترنت وأن التحكم عن بعد ما زال مفعّلاً عليه',
     remoteBack:'رجوع', remoteHome:'الرئيسية', remoteRecents:'الأخيرة', remoteSendText:'إرسال نص',
     remoteTextPh:'اكتب نصاً لإرساله إلى الحقل المُركَّز عليه في الهاتف', remoteHint:'انقر على الصورة للنقر على الهاتف. اسحب للتمرير.',
     remoteZoomIn:'تكبير', remoteZoomOut:'تصغير', remoteClose:'إغلاق', remoteApps:'التطبيقات',
@@ -132,6 +133,7 @@ const T = {
     confirmNewCode:'This creates a new enrollment code, and the phone will need to re-enroll with it. Continue?',
     accessibilityWarn:'⚠ Accessibility service is not enabled on this phone — taps and swipes will not work. Enable it from the phone\'s settings inside the Pulse app.',
     remote:'Remote control', remoteStart:'Start remote control', remoteStop:'Stop', remoteWaiting:'Waiting for the first frame from the phone…',
+    remoteLost:"Lost contact with the phone — check that it's online and remote control is still enabled on it",
     remoteBack:'Back', remoteHome:'Home', remoteRecents:'Recents', remoteSendText:'Send text',
     remoteTextPh:'Type text to send to the focused field on the phone', remoteHint:'Click the image to tap on the phone. Drag to swipe.',
     remoteZoomIn:'Zoom in', remoteZoomOut:'Zoom out', remoteClose:'Close', remoteApps:'Apps',
@@ -944,8 +946,22 @@ function openRemotePanel(id, name) {
     remoteCmd({ action: 'text', text: v }); $('#rcText').value = '';
   };
   const img = $('#rcImg');
-  img.onload = () => { $('#rcWait').hidden = true; img.hidden = false; };
-  img.onerror = () => { /* no frame yet this tick — keep showing the wait message */ };
+  RC.failStreak = 0;
+  img.onload = () => { RC.failStreak = 0; const w = $('#rcWait'); if (w) w.hidden = true; img.hidden = false; };
+  img.onerror = () => {
+    // A single missed poll is normal (a frame just wasn't ready yet at this
+    // exact 300ms tick) and shouldn't disturb an already-showing image — it
+    // used to: img stayed un-hidden with a now-broken src, so the browser's
+    // broken-image glyph flashed in over whatever was last shown. Only after
+    // several polls in a row fail (device actually dropped, not just a timing
+    // miss) do we re-hide the image and say so, instead of leaving a stale
+    // frame or a broken-image icon on screen indefinitely.
+    RC.failStreak = (RC.failStreak || 0) + 1;
+    if (RC.failStreak >= 5) {
+      const w = $('#rcWait'); if (w) { w.textContent = t('remoteLost'); w.hidden = false; }
+      img.hidden = true;
+    }
+  };
   img.onmousedown = e => {
     e.preventDefault();
     const r = img.getBoundingClientRect();
