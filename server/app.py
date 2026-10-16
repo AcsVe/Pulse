@@ -417,7 +417,7 @@ def create_app(test_config=None):
             if data.get(k):
                 setattr(dev, {'model': 'model', 'os': 'os_version', 'app': 'app_version'}[k], str(data[k])[:120])
         db.session.commit()
-        return jsonify({'ok': True, 'added': added, 'pollIntervalS': dev.poll_interval_s or 60,
+        return jsonify({'ok': True, 'added': added, 'pollIntervalS': dev.poll_interval_s or 5,
                          'remoteActive': bool(dev.remote_active)})
 
     # ── dashboard API ─────────────────────────────────────────────────────
@@ -718,7 +718,7 @@ def create_app(test_config=None):
         # if what we have is old enough it's probably stale (apps installed/
         # removed since).
         need_apps = bool(dev.remote_active) and (not dev.apps_at or now_ms() - dev.apps_at > 30 * 60 * 1000)
-        return jsonify({'active': bool(dev.remote_active), 'pollIntervalS': dev.poll_interval_s or 60, 'needApps': need_apps})
+        return jsonify({'active': bool(dev.remote_active), 'pollIntervalS': dev.poll_interval_s or 5, 'needApps': need_apps})
 
     @app.route('/api/v1/apps', methods=['POST'])
     def apps_upload():
