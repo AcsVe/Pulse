@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the dashboard's own brand colors (app.css / login.html / the
+         PWA manifest's theme_color) so the wrapper doesn't look like a
+         different, unrelated app around the page it's showing. -->
+    <color name="brand_navy">#0f2a43</color>
+    <color name="brand_blue">#164d72</color>
+    <color name="brand_teal">#0fb5a8</color>
+    <color name="white">#ffffff</color>
+</resources>

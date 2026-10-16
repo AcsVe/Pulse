@@ -1,0 +1,14 @@
+// Root build file — plain Android, no Capacitor/Node. Unlike android-app/
+// (the on-device collector, which has real native work to do: accessibility
+// service, VPN, screen capture), this is just a WebView pointed at the
+// Pulse dashboard your browser already shows — so it doesn't need any of
+// that tooling, and builds with nothing but the Android Gradle Plugin.
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.5.2'
+    }
+}
+allprojects {
+    repositories { google(); mavenCentral() }
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pulse can be self-hosted on a plain-HTTP LAN server (no TLS cert is
+     practical for a local IP) as well as a normal HTTPS deployment (e.g.
+     Render) — same reasoning as android-app's AndroidManifest patch for
+     the collector app. Allowing cleartext for all domains here is what
+     lets this WebView reach either kind of server the admin types in. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

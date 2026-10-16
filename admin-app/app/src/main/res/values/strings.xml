@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pulse Admin</string>
+    <string name="menu_change_server">Change server</string>
+    <string name="menu_reload">Reload</string>
+    <string name="server_url_title">Pulse server address</string>
+    <string name="server_url_hint">https://your-pulse-server.example.com</string>
+    <string name="server_url_save">Connect</string>
+    <string name="server_url_empty">Enter a server address first</string>
+    <string name="load_error">Couldn\'t reach %1$s — check the address and your connection, then pull down to retry.</string>
+</resources>

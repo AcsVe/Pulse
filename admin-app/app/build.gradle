@@ -1,0 +1,35 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'org.pulse.admin'
+    compileSdk 34
+
+    defaultConfig {
+        // Distinct from org.pulse.monitor (the on-device collector app) —
+        // this is a separate app (an admin/dashboard viewer), not a second
+        // copy of the thing being monitored, and the two need different IDs
+        // to ever be installed side by side without clobbering each other.
+        applicationId "org.pulse.admin"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'com.google.android.material:material:1.12.0'
+}

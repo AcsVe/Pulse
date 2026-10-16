@@ -1,0 +1,106 @@
+name: Build Pulse Admin APK
+
+# Builds the Pulse Admin app — a thin WebView wrapper around the dashboard,
+# for admins who'd rather tap a home-screen icon than open a browser — and
+# publishes it as a GitHub Release asset, so the stable link
+#   https://github.com/<owner>/<repo>/releases/download/admin-apk-latest/PulseAdmin.apk
+# always serves the newest build (tag-based, not /releases/latest/ — see the
+# note on the publish step below for why). Separate from build-apk.yml,
+# which builds the on-device collector app (android-app/) — different
+# project, different applicationId, different release.
+#
+# Unlike the collector app, this one has no npm/Capacitor step: it's plain
+# Android, so the only prerequisites are the JDK and the Android SDK the
+# runner image already ships.
+#
+# Signing (optional): same ANDROID_KEYSTORE_* repo secrets as build-apk.yml
+# work here too (reused, not duplicated) — without them the APK is
+# debug-signed, which installs fine but needs an uninstall before a newer
+# build can be installed over it.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "admin-app/**"
+      - ".github/workflows/build-admin-apk.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Build APK
+        working-directory: admin-app
+        env:
+          HAVE_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          chmod +x gradlew
+          if [ "$HAVE_KEYSTORE" = "true" ]; then
+            ./gradlew assembleRelease --no-daemon
+          else
+            ./gradlew assembleDebug --no-daemon
+          fi
+
+      - name: Sign / collect APK
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          mkdir -p out
+          OUT=admin-app/app/build/outputs/apk
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > release.keystore
+            BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+            ALIAS="$KEY_ALIAS"
+            if [ -z "$ALIAS" ]; then
+              ALIAS=$(keytool -list -storepass "$KS_PASS" -keystore release.keystore 2>/dev/null \
+                        | grep -m1 -E ', (PrivateKeyEntry)' | cut -d',' -f1)
+            fi
+            echo "Using signing alias: ${ALIAS:-<empty>}"
+            "$BT/zipalign" -f -p 4 "$OUT/release/app-release-unsigned.apk" aligned.apk
+            "$BT/apksigner" sign --ks release.keystore --ks-pass "pass:$KS_PASS" \
+              --ks-key-alias "$ALIAS" --key-pass "pass:${KEY_PASS:-$KS_PASS}" \
+              --out out/PulseAdmin.apk aligned.apk
+            rm -f release.keystore aligned.apk
+          else
+            echo "::warning::No signing secrets set — using a debug-signed APK (updates need uninstall/reinstall)."
+            cp "$OUT/debug/app-debug.apk" out/PulseAdmin.apk
+          fi
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PulseAdmin-apk
+          path: out/PulseAdmin.apk
+
+      - name: Publish release (stable download link)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Deliberately NOT --latest: build-apk.yml's "apk-latest" release is
+        # what /releases/latest/download/... resolves to for the collector
+        # app's stable link, and marking this one --latest too would steal
+        # that marker (there's only one "latest" release per repo) and break
+        # it. This release's own tag is still a permanently-stable URL —
+        # /releases/download/admin-apk-latest/PulseAdmin.apk — same idea,
+        # just addressed by tag instead of by the repo-wide "latest" marker.
+        run: |
+          gh release delete admin-apk-latest --cleanup-tag --yes || true
+          gh release create admin-apk-latest out/PulseAdmin.apk \
+            --title "Pulse Admin app" \
+            --notes "Dashboard viewer app for admins. Built from ${GITHUB_SHA::7}."

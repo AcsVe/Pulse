@@ -1,15 +1,19 @@
 # Pulse
 
-Pulse is a device-monitoring system with two parts:
+Pulse is a device-monitoring system with three parts:
 
 - **server/** — a Flask dashboard (deploy to Render, Neon/Postgres or any host) that
   stores events and shows reports, comparisons and sortable tables, with a kiosk
-  mode (`/screen?key=...`) meant for a wall-mounted smart screen.
+  mode (`/screen?key=...`) meant for a wall-mounted smart screen. Also installable
+  as a PWA (Android, iPhone, desktop — see `server/static/manifest.json`).
 - **android-app/** — a visible, disclosed Android app that collects app-usage
   sessions, browsing history (via an Accessibility service reading the browser's
   address bar, and via a local DNS-monitoring VPN that sees every app's lookups),
   and network outage periods (no-internet / connection-failed / disconnected),
-  and uploads them to the server.
+  and uploads them to the server. Installed on the *monitored* device.
+- **admin-app/** — a separate, much smaller native Android app: a plain WebView
+  wrapper around the dashboard, for whoever is *viewing* reports rather than
+  being monitored. See "Admin app" below.
 
 This is a disclosed monitoring tool, not spyware: the app keeps its icon, shows a
 persistent notification while running, and requires an explicit on-device consent
@@ -98,7 +102,7 @@ needing an uninstall first) — see the comment at the top of the workflow file.
 | Browser URLs | An `AccessibilityService` reads the address-bar view of common browsers (Chrome, Firefox, Samsung Internet, Edge, Opera, Brave, …) | Accessibility settings |
 | Visited domains (all apps) | A local, DNS-only `VpnService` — it does **not** tunnel general traffic, it only advertises itself as the device's DNS resolver and intercepts port-53 lookups, forwarding them to a real resolver (1.1.1.1) so normal browsing keeps working | VPN permission (one-time system dialog) |
 | Network outages | `ConnectivityManager` network callbacks + an active HTTP probe (`generate_204`) classify each period as `connected` / `no_internet` (network up, probe fails) / `failed` (a very short-lived connection attempt that bounced) / `disconnected` (no network at all) | Internet, Access Network State |
-| Data usage (download/upload) | `TrafficStats` per-UID counters, sampled every 15 min and diffed into per-interval deltas (one row per app, plus a `__device__` row for the whole-device total) | None (public API) |
+| Data usage (download/upload) | `NetworkStatsManager` per-UID queries (falls back to `TrafficStats` counters if Usage access isn't granted), sampled every 20s while live-sync is on (15 min otherwise) and diffed into per-interval deltas (one row per app, plus a `__device__` row for the whole-device total) | Usage Access for the per-app breakdown; the device-wide total needs no permission |
 | Memory usage | `ActivityManager.getMemoryInfo()`, sampled every 5 min | None (public API) |
 | Device IP address | Local interface lookup (`NetworkInterface`), sent with each sync | None |
 
@@ -118,10 +122,12 @@ Known limitations:
   (`ActivityManager#getProcessMemoryInfo`-style per-process stats were locked
   down for privacy reasons); the Settings tab shows device-level memory only,
   with a note explaining why CPU isn't there.
-- Per-UID `TrafficStats` can return 0 for some apps on some OEM builds/Android
-  versions (the counter is still a public API, but a few manufacturers
-  restrict it further); the device-level total row is unaffected since it
-  comes from a separate, always-available counter.
+- Per-app data usage needs Usage Access granted (same permission the app
+  already asks for elsewhere); without it, per-app rows fall back to
+  `TrafficStats`, which only reliably reports the app's *own* UID on modern
+  Android and returns 0 for everyone else — the device-level total row is
+  unaffected either way, since it comes from a separate, always-available
+  counter.
 
 ### Users & permissions
 
@@ -242,10 +248,32 @@ Requested but not built, for the reasons below:
 3. Grant the permission checklist (Usage Access, Accessibility, battery
    exemption, notifications, VPN) and tap **Start monitoring**.
 
+## Admin app
+
+`admin-app/` is a separate, much smaller Android app for the people viewing
+the dashboard (not the monitored device) — a plain WebView wrapper (no
+Capacitor, no native collector code) around whatever Pulse server URL the
+admin types in on first launch, so they get a home-screen icon and no
+browser chrome instead of a bookmark. It's an alternative to "Add to Home
+Screen" on the dashboard itself (see `server/static/manifest.json`), which
+does nearly the same thing without a separate app to install/update — use
+whichever the admin prefers.
+
+Built by its own workflow (`.github/workflows/build-admin-apk.yml`), same
+trigger pattern (push to `main` under `admin-app/**`, or run manually) and
+the same optional `ANDROID_KEYSTORE_*` signing secrets as the collector
+app, publishing `PulseAdmin.apk` to the repo's `admin-apk-latest` release —
+a separate release from the collector app's `apk-latest`, so one app
+updating doesn't disturb the other's stable download link.
+
+No enrollment code needed — it's just a browser for the dashboard, so
+whoever already has a login signs in the same way they would on the web.
+
 ## Repo layout
 
 ```
 server/            Flask app, dashboard, stats
-android-app/       Capacitor shell + native-src/ (hand-written Java)
-.github/workflows/ CI: builds and releases the APK
+android-app/       Capacitor shell + native-src/ (hand-written Java) — the on-device collector
+admin-app/         Plain WebView wrapper around the dashboard — for admins, not monitored devices
+.github/workflows/ CI: builds and releases both APKs
 ```
