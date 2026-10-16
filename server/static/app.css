@@ -299,10 +299,21 @@ body.kiosk svg text{fill:#bcd0de}
      edge, forcing the whole page to scroll sideways just to show it. */
   .popbody{min-width:0;width:min(230px,78vw)}
 }
-/* Prevents a single slightly-too-wide element anywhere (a long untranslated
-   label, a stray fixed width) from forcing the *entire page* to scroll
-   sideways on a phone — the one thing that makes a page feel fully broken
-   on mobile rather than just a little cramped. Inner scrollers (.tw, the
-   remote-control screen) keep their own explicit overflow-x and are
-   unaffected. */
-html,body{overflow-x:hidden}
+/* THE actual reason .top/.tabs' position:sticky never visibly worked,
+   on desktop as much as mobile, despite both already being coded
+   correctly: per the CSS Overflow spec, setting overflow-x to anything
+   other than visible (hidden here) forces the OTHER axis (overflow-y,
+   left at its default "visible") to compute to "auto" instead — so this
+   one rule silently turned <body> itself into a scroll container. Once
+   that happens, "sticky" elements inside it stick relative to body's own
+   scrollport, which browsers handle inconsistently (and Chrome in
+   particular often just drops the sticky positioning entirely in this
+   setup) — exactly the symptom reported: .tabs stuck while .top vanished
+   completely on scroll, both coded identically.
+   overflow-x:clip gives the same "stop sideways scroll" backstop without
+   ever creating that scroll container in the first place (that's the
+   specific difference clip was added to the spec for), so it can't
+   interfere with sticky. Inner scrollers (.tw, the remote-control
+   screen) keep their own explicit overflow-x and are unaffected either
+   way. */
+html,body{overflow-x:clip}
