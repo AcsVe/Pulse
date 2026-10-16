@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pulse</title>
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<link rel="icon" href="{{ url_for('static', filename='icons/icon-32.png') }}" sizes="32x32">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-180.png') }}">
+<meta name="theme-color" content="#164d72">
+<!-- iOS ignores the web manifest for "Add to Home Screen" — it needs these
+     specific meta tags instead to open full-screen without Safari's chrome
+     and to use the right icon/status-bar style. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pulse">
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body class="{{ 'kiosk' if kiosk else '' }}">
@@ -29,6 +39,11 @@
 <script>
   window.PULSE = { kiosk: {{ 'true' if kiosk else 'false' }}, key: {{ screen_key|tojson }}, apk: {{ apk_url|tojson }} };
 </script>
+{% if not kiosk %}<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('{{ url_for("static", filename="sw.js") }}').catch(() => {}));
+  }
+</script>{% endif %}
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
