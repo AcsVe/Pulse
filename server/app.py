@@ -424,7 +424,12 @@ def create_app(test_config=None):
     @app.route('/api/devices', methods=['GET'])
     @viewer_required
     def devices_list():
-        q = Device.query.order_by(Device.id)
+        # Alphabetical by name, not insertion order — the Devices *table* already
+        # re-sorts itself client-side, but every other place a device list is
+        # built from this endpoint (the header's device filter popover, the
+        # report-schedule device picker, the new-user device picker) just used
+        # whatever order came back here, i.e. creation order.
+        q = Device.query.order_by(Device.name)
         allowed = allowed_ids_for(current_user())
         if allowed is not None:
             q = q.filter(Device.id.in_(allowed))

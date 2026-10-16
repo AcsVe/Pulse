@@ -127,7 +127,7 @@ const T = {
     edit:'Edit', add:'Add', update:'Update', nameCol:'Name', timeCol:'Time', statusCol:'Status',
     on_:'Enabled', off_:'Disabled', mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun',
     recipient:'Recipient email', frequency:'Frequency', daily:'Daily', weekly:'Weekly', hourUtc:'Send hour (UTC)',
-    sections:'Sections to send', secOverview:'Overview', secApps:'Apps', secData:'Data usage', secNet:'Network', secDevices:'Devices',
+    sections:'Sections to send', secOverview:'Overview', secApps:'Apps', secData:'Data Usage', secNet:'Network', secDevices:'Devices',
     saveSettings:'Save settings', testSend:'Send test now', savedOk:'Saved', testSentOk:'Sent successfully',
     testFail:'Send failed', lastSent:'Last sent',
     memUsed:'Used', memFree:'Free', wifi:'Wi-Fi', cellular:'Cellular', unknownTransport:'Unknown',
@@ -250,12 +250,20 @@ function barChart(cur, prev, { h = 210, unit = 'ms' } = {}) {
   const slot = innerW / n, bw = Math.max(2, Math.min(34, slot * 0.62));
   const rtl = document.documentElement.dir === 'rtl';
   const X = i => rtl ? W - 6 - (i + 0.5) * slot : padL + (i + 0.5) * slot;
+  // Y-axis value labels used to share axisFont(n) with the X-axis category
+  // labels — so a 1-bar chart (e.g. Daily usage showing a single day) got
+  // much bigger numbers than a 24-bar one (Usage by hour of day), even
+  // though both show the same kind of number on the same card grid. The
+  // value axis now always renders at one fixed size; only the X-axis
+  // category labels still shrink as bar count grows (they're the ones that
+  // actually risk overlapping/crowding).
+  const yfs = 15;
   const fs = axisFont(n);
   let g = '';
   for (let i = 0; i <= 4; i++) {
     const y = padT + innerH - innerH * i / 4, val = max * i / 4;
     g += `<line x1="${padL}" x2="${W-6}" y1="${y}" y2="${y}" stroke="#d6e1e9" stroke-dasharray="3 4" opacity=".7"/>`;
-    g += `<text x="${rtl ? W - 0 : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="${fs}">${esc(fmtVal(val, unit))}</text>`;
+    g += `<text x="${rtl ? W - 0 : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="${yfs}">${esc(fmtVal(val, unit))}</text>`;
   }
   cur.forEach((d, i) => {
     const bh = innerH * d.v / max, x = X(i);
@@ -276,6 +284,7 @@ function stackedChart(days) {
   const slot = innerW / n, bw = Math.max(2, Math.min(34, slot * 0.62));
   const rtl = document.documentElement.dir === 'rtl';
   const X = i => rtl ? W - 6 - (i + 0.5) * slot : padL + (i + 0.5) * slot;
+  const yfs = 15; // fixed size, same reasoning as barChart's yfs — see there
   const fs = axisFont(n);
   let g = '';
   for (let i = 0; i <= 4; i++) {
@@ -284,7 +293,7 @@ function stackedChart(days) {
     // Match barChart's axis labels (e.g. "Usage by hour of day") instead of a
     // bare unlabelled number — minutes here, same unit the legend/tooltips
     // below already use, so the axis stops being the odd one out.
-    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="${fs}">${Math.round(max * i / 4)}${esc(t('m'))}</text>`;
+    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="${yfs}">${Math.round(max * i / 4)}${esc(t('m'))}</text>`;
   }
   rows.forEach((r, i) => {
     let y = padT + innerH;
