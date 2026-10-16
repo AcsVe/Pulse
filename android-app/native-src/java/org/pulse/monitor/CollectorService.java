@@ -12,6 +12,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 
 /**
  * Foreground service: keeps a persistent notification visible (the app is
@@ -33,6 +34,21 @@ public class CollectorService extends Service {
     private HandlerThread thread;
     private Handler handler;
     private NetMonitor netMonitor;
+    // A foreground service with "ignore battery optimizations" granted is
+    // still not enough on its own: that exemption stops the *system* from
+    // deferring this app's jobs/network, but it does nothing to stop the
+    // CPU itself from going to sleep in Doze once the screen is off, and a
+    // sleeping CPU just doesn't run a Handler's postDelayed() callbacks —
+    // they queue up and fire whenever something else next wakes the device
+    // (an unlock, a push...), which could be minutes or hours later. That
+    // gap is exactly what made a genuinely connected device sit at
+    // "Offline" on the dashboard for long stretches: last_seen really did
+    // stop updating, because this service really did stop running, even
+    // though nothing had crashed and the notification was still showing.
+    // Holding a PARTIAL_WAKE_LOCK for as long as the service is alive keeps
+    // the CPU (not the screen) awake so the poll/sync timers actually fire
+    // on schedule.
+    private PowerManager.WakeLock wakeLock;
     private final Runnable pollTask = new Runnable() {
         @Override public void run() {
             try {
@@ -113,6 +129,7 @@ public class CollectorService extends Service {
         super.onCreate();
         createChannel();
         startForeground(NOTIF_ID, buildNotification());
+        acquireWakeLock();
         thread = new HandlerThread("pulse-collector");
         thread.start();
         handler = new Handler(thread.getLooper());
@@ -155,6 +172,26 @@ public class CollectorService extends Service {
             handler.removeCallbacks(syncTask);
         }
         if (thread != null) thread.quitSafely();
+        releaseWakeLock();
+    }
+
+    private void acquireWakeLock() {
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm == null) return;
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "pulse:collector");
+            wakeLock.setReferenceCounted(false);
+            // No timeout: this is meant to be held for the service's whole
+            // lifetime (release() below is what ends it), not a short burst.
+            wakeLock.acquire();
+        } catch (Exception ignored) { }
+    }
+
+    private void releaseWakeLock() {
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+        } catch (Exception ignored) { }
+        wakeLock = null;
     }
 
     @Override

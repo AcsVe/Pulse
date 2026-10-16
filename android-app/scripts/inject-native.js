@@ -98,6 +98,15 @@ const permissions = [
   // a SecurityException that PulsePlugin used to swallow silently — the
   // "Ignore battery optimization" button would just do nothing when tapped.
   'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+  // Without a held wake lock, Doze still suspends the collector's own CPU
+  // time once the screen is off, even inside a foreground service with an
+  // exemption from battery optimization — the exemption keeps network/jobs
+  // from being deferred, but a bare Handler.postDelayed() on a background
+  // thread simply doesn't fire until something else wakes the CPU (a push,
+  // an unlock...), which is what let real devices go quiet for long
+  // stretches and show up as "Offline" while actually connected the whole
+  // time. See CollectorService's wakeLock.
+  'android.permission.WAKE_LOCK',
   // Remote control's "close app": the only kill a normal (non system, non
   // Device-Owner) app can do to another app's process — not a true
   // force-stop, just what this permission already allows: killing another
