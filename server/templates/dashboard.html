@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pulse">
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<link rel="stylesheet" href="{{ static_v('app.css') }}">
 </head>
 <body class="{{ 'kiosk' if kiosk else '' }}">
 <header class="top">
@@ -44,6 +44,6 @@
     window.addEventListener('load', () => navigator.serviceWorker.register('{{ url_for("static", filename="sw.js") }}').catch(() => {}));
   }
 </script>{% endif %}
-<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ static_v('app.js') }}"></script>
 </body>
 </html>

@@ -72,7 +72,7 @@ const T = {
     on_:'مفعّلة', off_:'متوقفة', mon:'إثنين', tue:'ثلاثاء', wed:'أربعاء', thu:'خميس', fri:'جمعة', sat:'سبت', sun:'أحد',
     remote:'تحكم عن بعد', remoteStart:'بدء التحكم عن بعد', remoteStop:'إيقاف', remoteWaiting:'بانتظار أول صورة من الهاتف…',
     remoteLost:'انقطع الاتصال بالهاتف — تأكد أنه متصل بالإنترنت وأن التحكم عن بعد ما زال مفعّلاً عليه',
-    remoteStale:'البث متوقف — الصورة المعروضة ليست حيّة (آخر صورة وصلت منذ لحظات ولم تتحدث)',
+    remoteStale:'الصورة لا تتحدث حالياً — جارٍ المحاولة',
     remoteBack:'رجوع', remoteHome:'الرئيسية', remoteRecents:'الأخيرة', remoteSendText:'إرسال نص',
     remoteTextPh:'اكتب نصاً لإرساله إلى الحقل المُركَّز عليه في الهاتف', remoteHint:'انقر على الصورة للنقر على الهاتف. اسحب للتمرير.',
     remoteZoomIn:'تكبير', remoteZoomOut:'تصغير', remoteClose:'إغلاق', remoteApps:'التطبيقات', remoteFullscreen:'ملء الشاشة',
@@ -145,7 +145,7 @@ const T = {
     accessibilityWarn:'⚠ Accessibility service is not enabled on this phone — taps and swipes will not work. Enable it from the phone\'s settings inside the Pulse app.',
     remote:'Remote control', remoteStart:'Start remote control', remoteStop:'Stop', remoteWaiting:'Waiting for the first frame from the phone…',
     remoteLost:"Lost contact with the phone — check that it's online and remote control is still enabled on it",
-    remoteStale:"Stream stalled — the picture shown isn't live (the last frame stopped updating)",
+    remoteStale:"Picture isn't updating right now — retrying",
     remoteBack:'Back', remoteHome:'Home', remoteRecents:'Recents', remoteSendText:'Send text',
     remoteTextPh:'Type text to send to the focused field on the phone', remoteHint:'Click the image to tap on the phone. Drag to swipe.',
     remoteZoomIn:'Zoom in', remoteZoomOut:'Zoom out', remoteClose:'Close', remoteApps:'Apps', remoteFullscreen:'Fullscreen',
@@ -242,7 +242,13 @@ function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Ma
 // chart looked unnecessarily small. Scale the axis font down as the point
 // count grows (and let it grow back up when there are only a few), so each
 // chart's text is sized to what's actually on it.
-function axisFont(n) { return n <= 8 ? 24 : n <= 16 ? 20 : n <= 31 ? 16 : 13; }
+// Was 24/20/16/13 — a chart with very few bars (a single "Today" bar in
+// Daily usage, n=1) blew its X-axis label up to 24px, which read as
+// wildly oversized next to the now-fixed 15px Y-axis labels (yfs below)
+// and next to a busier chart like Usage by hour of day (n=24, 13px).
+// Kept shrinking for genuinely crowded axes, just without ballooning the
+// other end for one or two bars that were never at risk of overlapping.
+function axisFont(n) { return n <= 8 ? 16 : n <= 16 ? 15 : n <= 31 ? 14 : 13; }
 function barChart(cur, prev, { h = 210, unit = 'ms' } = {}) {
   const n = cur.length; if (!n) return `<div class="empty">${t('noData')}</div>`;
   // W is deliberately smaller than the typical card width (not 1:1 with
@@ -1258,9 +1264,15 @@ async function tickRemoteFrame() {
           // constantly during ordinary use; only showing it after several
           // consecutive misses (~3.6s with nothing new) keeps it for an
           // actual freeze instead.
+          // Raised from 3 misses (~3.6s) to 6 (~7.2s): most of what was
+          // tripping this was the same CPU-sleep gap behind the "Offline"
+          // bug (see CollectorService's wake lock) — a brief, harmless
+          // pause, not a real freeze. A longer, more tolerant threshold
+          // keeps the banner for genuine stalls without flashing it in
+          // during ordinary jitter.
           if (RC.lastFrameAt && d.remoteFrameAt === RC.lastFrameAt && !$('#rcImg').hidden) {
             RC.staleStreak = (RC.staleStreak || 0) + 1;
-            if (RC.staleStreak >= 3) stale.classList.remove('hidden');
+            if (RC.staleStreak >= 6) stale.classList.remove('hidden');
           } else {
             RC.staleStreak = 0;
             stale.classList.add('hidden');

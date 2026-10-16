@@ -238,7 +238,10 @@ body.kiosk svg text{fill:#bcd0de}
    <img> itself keeps loading that same cached JPEG successfully on every
    poll (onload fires, nothing errors), so without this there was no way to
    tell a frozen picture from a live one. */
-.remote-stale{position:absolute;top:10px;inset-inline-start:10px;inset-inline-end:10px;background:rgba(214,69,69,.9);color:#fff;padding:7px 12px;border-radius:8px;font-size:.78rem;text-align:center;z-index:3}
+/* Amber/"retrying" tone, not the red/"broken" one — this almost always
+   clears itself within a few seconds (see tickRemoteFrame's staleStreak),
+   so it reads as a brief status note, not an alarm. */
+.remote-stale{position:absolute;top:10px;inset-inline-start:10px;inset-inline-end:10px;background:rgba(224,138,30,.92);color:#fff;padding:7px 12px;border-radius:8px;font-size:.78rem;text-align:center;z-index:3}
 .remote-stale.hidden{display:none}
 /* Icon-only toolbar (was text buttons: "⟲ رجوع", "⌂ الرئيسية"...) — tooltip
    via title carries the label instead, for a cleaner, denser control row. */

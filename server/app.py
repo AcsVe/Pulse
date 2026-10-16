@@ -51,6 +51,22 @@ def create_app(test_config=None):
     if test_config:
         app.config.update(test_config)
     db.init_app(app)
+
+    @app.template_global()
+    def static_v(filename):
+        """url_for('static', ...) alone lets browsers (and any CDN/proxy in
+        front of the deploy) keep serving a cached app.css/app.js from
+        before the last update — "I pushed and redeployed but the fix still
+        isn't showing" is almost always this, not the fix itself being
+        wrong. Appending the file's own mtime as a query string makes the
+        URL itself change on every deploy that actually touches the file,
+        so there's nothing stale left to serve."""
+        path = os.path.join(app.static_folder, filename)
+        try:
+            v = int(os.path.getmtime(path))
+        except OSError:
+            v = 0
+        return url_for('static', filename=filename) + f'?v={v}'
     os.makedirs(app.config['SCREENS_DIR'], exist_ok=True)
     with app.app_context():
         db.create_all()
