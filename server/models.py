@@ -1,6 +1,6 @@
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
 
@@ -8,7 +8,20 @@ db = SQLAlchemy()
 
 
 def now_ms():
-    return int(datetime.utcnow().timestamp() * 1000)
+    # BUG FIX: datetime.utcnow() returns a "naive" datetime — it holds the
+    # correct UTC wall-clock value but carries no timezone tag. Calling
+    # .timestamp() on a naive datetime makes Python assume it's LOCAL time
+    # and convert it to epoch using the SYSTEM's local UTC offset. On any
+    # server whose OS timezone isn't UTC (e.g. Asia/Amman, UTC+3), that
+    # silently shifted every timestamp in the whole app (last_seen, all
+    # stats windows, "Live now", Data Usage filtering, ...) back by exactly
+    # that offset — which is exactly the 3-hour gap that made devices look
+    # perpetually "Offline" and recent windows look empty, even while the
+    # device was actively reporting.
+    # datetime.now(timezone.utc) is timezone-AWARE, so .timestamp() computes
+    # the real epoch correctly no matter what timezone the server OS is set
+    # to.
+    return int(datetime.now(timezone.utc).timestamp() * 1000)
 
 
 def sha256(s):
