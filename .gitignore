@@ -1,0 +1,18 @@
+# Python / Flask server
+__pycache__/
+*.pyc
+server/instance/
+server/pulse.db
+.env
+
+# Android (collector app's generated platform dir; admin-app's local build output)
+android-app/android/
+android-app/node_modules/
+*/build/
+*/.gradle/
+local.properties
+*.apk
+*.aab
+
+# Editors / OS
+.DS_Store
