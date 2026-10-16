@@ -110,7 +110,7 @@ const T = {
     model:'Model', os:'Android', online:'Online', offline:'Offline', pending:'Awaiting enrollment', enrolledAt:'Enrolled', name:'Name',
     downloadApk:'Download the Pulse app (APK)', updated:'Updated', legendNote:'Grey bars = previous period',
     h:'h', m:'m', s:'s', sessionsN:'Sessions',
-    download:'Download', upload:'Upload', dataUsage:'Data usage', dataHourly:'Usage by hour',
+    download:'Download', upload:'Upload', dataUsage:'Data Usage', dataHourly:'Usage by hour',
     topDataApps:'Heaviest data users', websitesPie:'Sites breakdown', connPie:'Connection type', memPie:'Memory',
     liveNow:'Live now', liveNowHint:'Last {s}s — updates automatically', liveNowApps:'App data usage right now',
     liveNowSites:'Recently opened sites', liveNowEmpty:'No activity in this window', liveNowDevTotal:'Device total',
@@ -281,7 +281,10 @@ function stackedChart(days) {
   for (let i = 0; i <= 4; i++) {
     const y = padT + innerH - innerH * i / 4;
     g += `<line x1="${padL}" x2="${W-6}" y1="${y}" y2="${y}" stroke="#d6e1e9" stroke-dasharray="3 4" opacity=".7"/>`;
-    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="${fs}">${Math.round(max * i / 4)}</text>`;
+    // Match barChart's axis labels (e.g. "Usage by hour of day") instead of a
+    // bare unlabelled number — minutes here, same unit the legend/tooltips
+    // below already use, so the axis stops being the odd one out.
+    g += `<text x="${rtl ? W : 0}" text-anchor="${rtl ? 'end' : 'start'}" y="${y+4}" font-size="${fs}">${Math.round(max * i / 4)}${esc(t('m'))}</text>`;
   }
   rows.forEach((r, i) => {
     let y = padT + innerH;
@@ -361,6 +364,16 @@ function deltaChip(k) {
 }
 async function renderOverview() {
   const d = await api('/api/overview?' + qs());
+  // The 8s auto-refresh re-fetches this unconditionally, and between polls
+  // the answer is very often byte-for-byte the same (nothing changed in the
+  // underlying data yet) — rebuilding and replacing every chart's innerHTML
+  // anyway was the main source of the periodic full-dashboard flicker, so
+  // skip the DOM rebuild entirely when the response is identical to what's
+  // already on screen. renderLiveNow() still refreshes on its own cadence
+  // below regardless, since that card is meant to visibly tick.
+  const sig = JSON.stringify(d);
+  if (sig === S._overviewSig && $('#liveNowCard')) { renderLiveNow(); return; }
+  S._overviewSig = sig;
   const kp = d.kpis.map(k => `<div class="kpi ${k.tone === 'bad' ? 'bad' : k.tone === 'good' ? 'good' : ''}">
       <div class="l">${esc(t(k.key))}</div><div class="v">${esc(fmtVal(k.value, k.unit))}</div>
       <div class="d">${deltaChip(k)}<span class="prev">${esc(t('prev'))}: ${esc(fmtVal(k.prev, k.unit))}</span></div></div>`).join('');
@@ -391,6 +404,7 @@ async function renderOverview() {
     <div class="grid cols2">
       <div class="card"><h3>${t('dailyUse')}</h3>${barChart(cur, prev)}<div class="legend"><span><i style="background:var(--teal)"></i>${t('current')}</span><span><i style="background:#aebfcc"></i>${t('previous')}</span></div></div>
       <div class="card"><h3>${t('hourlyUse')}</h3>${barChart(hrs, null)}</div>
+      <div class="card"><h3>${t('connPie')}</h3>${pieChart(transParts, v => fmtDur(v))}</div>
       <div class="card"><h3>${t('net')}</h3>
         <div style="display:flex;height:22px;border-radius:8px;overflow:hidden;background:#e8eff4">${netBar}</div><div class="legend">${netLegend}</div>
         <h3 style="margin-top:16px">${t('outageDaily')}</h3>${stackedChart(d.daily)}</div>
@@ -400,7 +414,6 @@ async function renderOverview() {
       <div class="card"><h3>${t('dataHourly')}</h3>${barChart(dataHrs, null, { unit: 'bytes' })}
         <h3 style="margin-top:16px">${t('topDataApps')}</h3>${barRows((d.topDataApps||[]).map(a => ({ name: a.label, v: a.rx + a.tx })), maxDataApp, it => fmtBytes(it.v))}</div>
       <div class="card"><h3>${t('websitesPie')}</h3>${pieChart(siteParts, v => String(v))}</div>
-      <div class="card"><h3>${t('connPie')}</h3>${pieChart(transParts, v => fmtDur(v))}</div>
     </div>`;
   renderLiveNow();
 }
@@ -575,7 +588,7 @@ function wireDeviceRename(host, reload) {
   });
 }
 async function setPollInterval(id, current, reload) {
-  const v = prompt(t('pollIntervalHint'), current || '60');
+  const v = prompt(t('pollIntervalHint'), current || '5');
   if (v == null) return;
   const n = parseInt(v, 10);
   if (!n || n < 5) return;
@@ -668,10 +681,17 @@ async function renderDevices() {
   // a device as offline if its own (admin-configurable) update interval was
   // longer than that — the window now scales with the device's own interval.
   const rows = list.map(d => {
-    const win = Math.max(15 * 60000, (d.pollIntervalS || 60) * 1000 * 3);
+    const win = Math.max(15 * 60000, (d.pollIntervalS || 5) * 1000 * 3);
     return { ...d, status: !d.enrolled ? 'pending' : (d.lastSeen && now - d.lastSeen < win ? 'online' : 'offline') };
   });
   const code = rows.find(r => r.enrollCode && r._show);
+  // Same flicker fix as Overview (see renderOverview): the 5s Devices-tab
+  // auto-refresh was rebuilding the whole table — add card, codebox and
+  // all — every single tick even when nothing about any device had
+  // actually changed since the last one.
+  const sig = JSON.stringify(rows) + '|' + (code ? code.id : '');
+  if (sig === S._devicesSig && $('#tbl')) return;
+  S._devicesSig = sig;
   $('#main').innerHTML = `
     ${canWrite() ? `<div class="card"><h3>${t('addDevice')}</h3>
       <div class="add"><input id="newName" placeholder="${esc(t('deviceName'))}"><button class="pbtn" id="addBtn">${t('create')}</button></div>
@@ -704,8 +724,8 @@ async function renderDevices() {
     { k: 'wifiMbps', label: t('wifiSpeed'), w: 110, num: true, fmt: v => v ? `${v} Mbps` : '—' },
     { k: 'pollIntervalS', label: t('pollIntervalS'), w: 130,
       html: x => canWrite()
-        ? `<span class="lbl">${x.pollIntervalS || 60}</span><button class="pollbtn" data-id="${x.id}" title="${esc(t('pollIntervalHint'))}">✎</button>`
-        : `<span class="lbl">${x.pollIntervalS || 60}</span>`,
+        ? `<span class="lbl">${x.pollIntervalS || 5}</span><button class="pollbtn" data-id="${x.id}" title="${esc(t('pollIntervalHint'))}">✎</button>`
+        : `<span class="lbl">${x.pollIntervalS || 5}</span>`,
       text: x => x.pollIntervalS },
     { k: 'model', label: t('model'), w: 150 },
     { k: 'osVersion', label: t('os'), w: 90 },
@@ -1095,9 +1115,18 @@ async function tickRemoteFrame() {
         RC.w = d.remoteScreenW || RC.w; RC.h = d.remoteScreenH || RC.h;
         const stale = $('#rcStale');
         if (stale && d.remoteFrameAt) {
+          // A single unchanged reading here only means the phone's next
+          // capture (every ~250ms) hasn't landed within this ~1.2s check —
+          // normal network jitter, not a real stall. Flagging it on the very
+          // first miss made the "stream stalled" banner flash on and off
+          // constantly during ordinary use; only showing it after several
+          // consecutive misses (~3.6s with nothing new) keeps it for an
+          // actual freeze instead.
           if (RC.lastFrameAt && d.remoteFrameAt === RC.lastFrameAt && !$('#rcImg').hidden) {
-            stale.classList.remove('hidden');
+            RC.staleStreak = (RC.staleStreak || 0) + 1;
+            if (RC.staleStreak >= 3) stale.classList.remove('hidden');
           } else {
+            RC.staleStreak = 0;
             stale.classList.add('hidden');
           }
           RC.lastFrameAt = d.remoteFrameAt;
