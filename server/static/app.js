@@ -453,6 +453,20 @@ async function renderLiveNow() {
   let d;
   try { d = await api(`/api/live?window=${LIVE_WINDOW_S * 1000}&` + qs()); } catch (e) { return; }
   if ($('#liveNowCard') !== host) return; // stale response from a since-replaced card
+  // This card polls every 4s (startLiveNow below) independent of the rest of
+  // the dashboard, specifically so the Overview tab doesn't have to tear
+  // itself down every few seconds just to keep "live" numbers moving. But
+  // rebuilding *this* card's innerHTML on every one of those ticks — even
+  // when the window's contents haven't actually changed, which is most
+  // ticks on a quiet device — caused the same kind of flash the rest of the
+  // dashboard's dedupe (see renderApps/renderData/etc.) was already fixing
+  // elsewhere. Skip the DOM write when nothing changed.
+  const sig = JSON.stringify(d);
+  // host.innerHTML check: the Overview tab was just (re)entered and this
+  // card is a freshly-emptied placeholder div — render even if the data
+  // happens to match the last thing shown before the tab was left.
+  if (sig === S._liveSig && host.innerHTML) return;
+  S._liveSig = sig;
   const apps = d.apps || [], sites = d.sites || [];
   const dt = d.deviceTotal || { rx: 0, tx: 0 };
   // Per-app attribution needs a NetworkStatsManager per-UID query that can
@@ -478,8 +492,8 @@ async function renderLiveNow() {
     <h3><span class="live-dot"></span>${t('liveNow')}
       <span class="live-sub">${t('liveNowHint').replace('{s}', LIVE_WINDOW_S)}</span></h3>
     <div class="grid cols2 live-grid">
-      <div><h4>${t('liveNowApps')}</h4>${appRows}</div>
-      <div><h4>${t('liveNowSites')}</h4>${siteRows}</div>
+      <div><h4>${t('liveNowApps')}</h4><div class="live-list">${appRows}</div></div>
+      <div><h4>${t('liveNowSites')}</h4><div class="live-list">${siteRows}</div></div>
     </div>`;
 }
 // Keeps the Overview tab's "live now" feed current on its own cadence —
