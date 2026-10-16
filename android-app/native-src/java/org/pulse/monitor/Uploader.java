@@ -158,7 +158,7 @@ public class Uploader {
             // Devices tab) rides along on every sync response, so the device
             // picks up a change within one sync cycle without a dedicated
             // polling endpoint for it.
-            if (res.has("pollIntervalS")) db.put("poll_interval_s", String.valueOf(res.optInt("pollIntervalS", 60)));
+            if (res.has("pollIntervalS")) db.put("poll_interval_s", String.valueOf(res.optInt("pollIntervalS", 5)));
             return true;
         } catch (IOException e) {
             return false;

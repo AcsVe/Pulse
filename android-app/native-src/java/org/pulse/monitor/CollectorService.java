@@ -63,7 +63,7 @@ public class CollectorService extends Service {
         // saving, not to turn it on.
         if (db.getBool("live_sync", true)) return LIVE_SYNC_MS;
         try {
-            int s = Integer.parseInt(db.getStr("poll_interval_s", "60"));
+            int s = Integer.parseInt(db.getStr("poll_interval_s", "5"));
             return Math.max(5, Math.min(s, 3600)) * 1000L;
         } catch (NumberFormatException e) {
             return POLL_MS;
