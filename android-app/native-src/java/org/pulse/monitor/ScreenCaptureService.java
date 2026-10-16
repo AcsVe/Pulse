@@ -264,7 +264,7 @@ public class ScreenCaptureService extends Service {
                 // scale them up to rawWidth/rawHeight before dispatching, or
                 // every tap/swipe lands at the wrong spot (worse the further
                 // from the top-left corner it is).
-                case "tap": svc.tap(scaleX(p.optInt("x")), scaleY(p.optInt("y"))); break;
+                case "tap": svc.tap(scaleX(p.optInt("x")), scaleY(p.optInt("y")), p.optInt("duration", 80)); break;
                 case "swipe": svc.swipe(scaleX(p.optInt("x")), scaleY(p.optInt("y")),
                         scaleX(p.optInt("x2")), scaleY(p.optInt("y2")), p.optInt("duration", 300)); break;
                 case "text": svc.setFocusedText(p.optString("text", "")); break;

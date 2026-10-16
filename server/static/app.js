@@ -1148,7 +1148,11 @@ function openRemotePanel(id, name) {
     const toDevY = px => Math.round((px / RC.drag.h) * (RC.h || img.naturalHeight || 1920));
     if (Math.hypot(dx, dy) < 12) {
       tapFx(RC.drag.x, RC.drag.y);
-      remoteCmd({ action: 'tap', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y) });
+      // Forwarding how long the admin actually held it down (not always a
+      // fixed quick tap) is what makes a press-and-hold register on the
+      // phone as a real long-press — opening a context menu, starting an
+      // icon drag, etc. — instead of every hold just being a fast tap.
+      remoteCmd({ action: 'tap', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y), duration: Date.now() - RC.drag.t });
     } else {
       tapFx(x2, y2);
       remoteCmd({ action: 'swipe', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y), x2: toDevX(x2), y2: toDevY(y2),

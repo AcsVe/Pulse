@@ -65,11 +65,17 @@ public class PulseAccessibilityService extends AccessibilityService {
     }
 
     // ── remote control: input injection ─────────────────────────────────
-    public boolean tap(int x, int y) {
+    /** durationMs lets a held-down tap on the dashboard register as an
+     *  actual long-press on the phone (e.g. to open a context menu or
+     *  start dragging an icon) instead of always being a fixed quick tap —
+     *  see ScreenCaptureService's "tap" case, which forwards how long the
+     *  admin actually held the click/touch down. */
+    public boolean tap(int x, int y, int durationMs) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false;
         Path path = new Path();
         path.moveTo(x, y);
-        GestureDescription.StrokeDescription stroke = new GestureDescription.StrokeDescription(path, 0, 80);
+        long d = Math.max(40, Math.min(durationMs, 1500));
+        GestureDescription.StrokeDescription stroke = new GestureDescription.StrokeDescription(path, 0, d);
         return dispatchGesture(new GestureDescription.Builder().addStroke(stroke).build(), null, null);
     }
 
