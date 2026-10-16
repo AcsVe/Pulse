@@ -203,6 +203,16 @@ body.kiosk svg text{fill:#bcd0de}
 .rcicon.danger:hover{background:rgba(214,69,69,.35)}
 .remote-text{display:flex;gap:8px;margin-top:10px}
 .remote-text input{flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff}
+/* #rcSendText is a plain .tbtn — a light-theme white button with a pale
+   border, built for cards on the dashboard's white background. Dropped
+   into the dark remote-control panel it stayed white, standing out like a
+   hole in the dark UI ("the white button is very ugly" / "white button
+   still !!!!" across several reports). Re-skin it to match the dark
+   .rcicon controls instead of overriding .tbtn globally, which other,
+   correctly-light-themed buttons still rely on. */
+.remote-text .tbtn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);font-weight:700}
+.remote-text .tbtn:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4)}
+.remote-text .tbtn[disabled]{opacity:.35}
 .remote-hint{font-size:.76rem;color:#9db6c9;margin-top:8px}
 /* "Apps" panel (open/close), toggled by the ⊞ header icon */
 .remote-apps-panel{margin-top:10px;padding:10px;border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.04)}
