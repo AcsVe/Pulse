@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pulse_access_desc">Used by the Pulse app to read the browser address bar and log the sites opened on this device, within the monitoring scope you agreed to.</string>
+    <string name="pulse_device_admin_desc">Prevents uninstalling Pulse directly from Settings without first disabling this protection.</string>
+</resources>

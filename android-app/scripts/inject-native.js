@@ -33,14 +33,30 @@ fs.mkdirSync(xmlDst, { recursive: true });
 fs.copyFileSync(path.join(ROOT, 'native-src/xml/pulse_accessibility_config.xml'), path.join(xmlDst, 'pulse_accessibility_config.xml'));
 fs.copyFileSync(path.join(ROOT, 'native-src/xml/pulse_device_admin.xml'), path.join(xmlDst, 'pulse_device_admin.xml'));
 
-const stringsPath = path.join(RES_DST, 'values/strings.xml');
-const pulseStringsSnippet = fs.readFileSync(path.join(ROOT, 'native-src/values/pulse_strings.xml'), 'utf8')
-  .match(/<resources>([\s\S]*)<\/resources>/)[1].trim();
-let strings = fs.readFileSync(stringsPath, 'utf8');
-if (!strings.includes('pulse_access_desc')) {
-  strings = strings.replace('</resources>', '    ' + pulseStringsSnippet + '\n</resources>');
-  fs.writeFileSync(stringsPath, strings);
-  console.log('patched strings.xml');
+// Default (values/, no qualifier) is Arabic and English (values-en/) is the
+// explicit override — without the second one, Android has no English
+// resource to fall back to and always shows the Arabic description in
+// system screens (the Accessibility settings list, the device-admin
+// activation screen) regardless of the phone's own language, since those
+// are native string resources the in-app JS language toggle can't reach at
+// all. Looping over both locale dirs here instead of hand-duplicating the
+// single-locale block keeps it from silently drifting out of sync again if
+// a third locale is ever added.
+for (const locale of ['values', 'values-en']) {
+  const srcFile = path.join(ROOT, `native-src/${locale}/pulse_strings.xml`);
+  if (!fs.existsSync(srcFile)) continue;
+  const pulseStringsSnippet = fs.readFileSync(srcFile, 'utf8')
+    .match(/<resources>([\s\S]*)<\/resources>/)[1].trim();
+  const stringsPath = path.join(RES_DST, locale, 'strings.xml');
+  fs.mkdirSync(path.dirname(stringsPath), { recursive: true });
+  let strings = fs.existsSync(stringsPath)
+    ? fs.readFileSync(stringsPath, 'utf8')
+    : '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n';
+  if (!strings.includes('pulse_access_desc')) {
+    strings = strings.replace('</resources>', '    ' + pulseStringsSnippet + '\n</resources>');
+    fs.writeFileSync(stringsPath, strings);
+    console.log('patched', locale + '/strings.xml');
+  }
 }
 
 // 3. MainActivity: register the plugin ---------------------------------------
