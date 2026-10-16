@@ -62,6 +62,13 @@ public class ScreenCaptureService extends Service {
     private HandlerThread thread;
     private Handler handler;
     private int width, height, density;
+    // Real (un-downscaled) screen size, in the same pixel space the
+    // accessibility service's dispatchGesture() expects. width/height above
+    // are the capped-to-720p capture dimensions sent to the dashboard —
+    // tap/swipe coordinates arrive back in THAT space and must be scaled up
+    // to these before dispatch, or every touch lands at `width/rawWidth` of
+    // where the dashboard image was actually tapped (see tap()/swipe() below).
+    private int rawWidth, rawHeight;
     private volatile boolean active = false;
 
     public static void start(Context ctx, int resultCode, Intent data) {
@@ -151,6 +158,7 @@ public class ScreenCaptureService extends Service {
         density = dm.densityDpi > 0 ? dm.densityDpi : 160;
         int rawW = dm.widthPixels > 0 ? dm.widthPixels : 1080;
         int rawH = dm.heightPixels > 0 ? dm.heightPixels : 1920;
+        rawWidth = rawW; rawHeight = rawH;
         // Cap to ~720p-equivalent — a remote-control view doesn't need native
         // resolution, and this keeps JPEGs small (cheap, frequent uploads).
         float scale = Math.min(1f, 720f / Math.max(rawW, rawH));
@@ -223,6 +231,9 @@ public class ScreenCaptureService extends Service {
         }
     }
 
+    private int scaleX(int x) { return width > 0 && rawWidth > 0 ? Math.round(x * (rawWidth / (float) width)) : x; }
+    private int scaleY(int y) { return height > 0 && rawHeight > 0 ? Math.round(y * (rawHeight / (float) height)) : y; }
+
     private void pollAndRunCommands() throws IOException {
         Db db = Db.get(this);
         String serverUrl = db.getStr("server_url", null);
@@ -247,8 +258,15 @@ public class ScreenCaptureService extends Service {
             if ("close".equals(action)) { closeApp(p.optString("pkg", ""), svc); continue; }
             if (svc == null) continue; // accessibility not enabled — the rest are silently dropped
             switch (action) {
-                case "tap": svc.tap(p.optInt("x"), p.optInt("y")); break;
-                case "swipe": svc.swipe(p.optInt("x"), p.optInt("y"), p.optInt("x2"), p.optInt("y2"), p.optInt("duration", 300)); break;
+                // x/y/x2/y2 arrive in the downscaled capture's pixel space (the
+                // dashboard computes them against the screenshot it's showing,
+                // which is `width`x`height`, not the device's real resolution) —
+                // scale them up to rawWidth/rawHeight before dispatching, or
+                // every tap/swipe lands at the wrong spot (worse the further
+                // from the top-left corner it is).
+                case "tap": svc.tap(scaleX(p.optInt("x")), scaleY(p.optInt("y"))); break;
+                case "swipe": svc.swipe(scaleX(p.optInt("x")), scaleY(p.optInt("y")),
+                        scaleX(p.optInt("x2")), scaleY(p.optInt("y2")), p.optInt("duration", 300)); break;
                 case "text": svc.setFocusedText(p.optString("text", "")); break;
                 case "back": case "home": case "recents": svc.globalAction(action); break;
                 default: break;
