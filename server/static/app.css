@@ -246,4 +246,24 @@ body.kiosk svg text{fill:#bcd0de}
   .top{padding:8px 12px} .tabs{top:auto;position:static} main{padding:10px}
   .cols2{grid-template-columns:1fr}
   .tw{max-height:min(72vh,560px)}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}
+  .kpi{padding:11px 12px}
+  .kpi .v{font-size:1.35rem}
+  .card{padding:12px;border-radius:12px}
+  .codebox{padding:12px 14px;gap:10px}
+  .codebox .code{font-size:1.5rem;letter-spacing:2px}
+  .add input{min-width:0;flex:1}
+  /* The device/period popovers anchor to the controls bar's own edge and
+     were a fixed 230px wide regardless of viewport — on a narrow phone
+     (<360px) that alone is most of the screen, and combined with its
+     inset-inline-end:0 anchor could push part of itself past the opposite
+     edge, forcing the whole page to scroll sideways just to show it. */
+  .popbody{min-width:0;width:min(230px,78vw)}
 }
+/* Prevents a single slightly-too-wide element anywhere (a long untranslated
+   label, a stray fixed width) from forcing the *entire page* to scroll
+   sideways on a phone — the one thing that makes a page feel fully broken
+   on mobile rather than just a little cramped. Inner scrollers (.tw, the
+   remote-control screen) keep their own explicit overflow-x and are
+   unaffected. */
+html,body{overflow-x:hidden}
