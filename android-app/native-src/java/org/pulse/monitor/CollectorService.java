@@ -69,10 +69,20 @@ public class CollectorService extends Service {
             return POLL_MS;
         }
     }
+    // Live sync also speeds up per-app bandwidth sampling (for the
+    // dashboard's "live now" data-usage feed) — but not down to LIVE_SYNC_MS:
+    // each sample walks every installed app's UID counters via
+    // PackageManager + TrafficStats, which is meaningfully heavier than a
+    // sync tick, so this settles for "every 20s" (still 45x more often than
+    // the old fixed 15 minutes) rather than hammering that loop every 5s.
+    private static final long LIVE_DATA_POLL_MS = 20_000;
+    private long currentDataPollMs() {
+        return Db.get(getApplicationContext()).getBool("live_sync", true) ? LIVE_DATA_POLL_MS : DATA_POLL_MS;
+    }
     private final Runnable dataTask = new Runnable() {
         @Override public void run() {
             try { new DataUsageCollector(getApplicationContext()).poll(); } catch (Exception ignored) { }
-            handler.postDelayed(this, DATA_POLL_MS);
+            handler.postDelayed(this, currentDataPollMs());
         }
     };
     private final Runnable memTask = new Runnable() {

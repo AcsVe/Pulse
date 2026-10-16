@@ -51,6 +51,25 @@ main{padding:16px;max-width:1500px;margin:0 auto}
 .grid{display:grid;gap:14px}
 .kpis{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
 .kpi{background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,42,67,.08);border-top:4px solid var(--teal)}
+/* "Live now" card (renderLiveNow in app.js) — the Overview tab's own fast
+   (4s) feed of per-app bandwidth and recently-opened sites, separate from
+   the rest of the tab's from/to-period charts. The pulsing dot is the only
+   visual cue that this one card refreshes on a different, faster clock
+   than everything below it — without it the card looks like it belongs to
+   the same slow cycle as the rest of the page. */
+.live-card{border-top:4px solid var(--coral)}
+.live-card h3{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.live-dot{width:9px;height:9px;border-radius:50%;background:var(--coral);flex:none;animation:live-pulse 1.6s ease-in-out infinite}
+@keyframes live-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(239,106,76,.5)}50%{opacity:.6;box-shadow:0 0 0 5px rgba(239,106,76,0)}}
+.live-sub{font-size:.76rem;font-weight:500;color:var(--muted);margin-inline-start:auto}
+.live-grid{margin-top:10px;gap:18px}
+.live-card h4{font-size:.82rem;color:var(--muted);margin-bottom:6px;font-weight:700}
+.liverow{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:.86rem}
+.liverow:last-child{border-bottom:none}
+.liverow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+.liverow .liveval{color:var(--navy);font-weight:700;white-space:nowrap}
+.liverow .liveval.muted{color:var(--muted);font-weight:500}
+.empty.small{padding:10px 0;font-size:.82rem}
 .kpi.bad{border-top-color:var(--coral)} .kpi.good{border-top-color:var(--good)}
 .kpi .l{font-size:.8rem;color:var(--muted);font-weight:700}
 .kpi .v{font-size:1.7rem;font-weight:800;margin:4px 0;color:var(--navy)}

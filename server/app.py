@@ -870,6 +870,49 @@ def create_app(test_config=None):
         a, b, tz, ids, now = params()
         return jsonify(stats.overview(ids, a, b, tz, now))
 
+    @app.route('/api/live')
+    @viewer_required
+    def api_live():
+        # A short recent window, not the dashboard's from/to period — this is
+        # the "what's happening right now" feed (per-app bandwidth, recently
+        # visited sites), meant to be polled every few seconds on its own.
+        # Only useful once the phone itself is actually sampling that often
+        # (DataUsageCollector's cadence follows the same live-sync setting as
+        # the rest of the sync pipeline) — with the old fixed 15-minute
+        # sampling this would have sat empty between polls almost always.
+        ids = [int(x) for x in (request.args.get('devices') or '').split(',') if x.strip().isdigit()]
+        if not ids:
+            ids = [d.id for d in Device.query.all()]
+        allowed = allowed_ids_for(current_user())
+        if allowed is not None:
+            ids = [i for i in ids if i in allowed]
+        window_ms = min(max(_int(request.args.get('window')) or 90000, 10000), 600000)
+        since = now_ms() - window_ms
+        if not ids:
+            return jsonify({'apps': [], 'deviceTotal': {'rx': 0, 'tx': 0}, 'sites': [], 'windowMs': window_ms})
+
+        rows = DataUsage.query.filter(DataUsage.device_id.in_(ids), DataUsage.ts >= since).all()
+        per_app = {}
+        dev_total = {'rx': 0, 'tx': 0}
+        for r in rows:
+            if r.package == '__device__':
+                dev_total['rx'] += r.rx_bytes or 0
+                dev_total['tx'] += r.tx_bytes or 0
+                continue
+            key = r.package
+            agg = per_app.setdefault(key, {'package': r.package, 'label': r.label or r.package, 'rx': 0, 'tx': 0})
+            agg['rx'] += r.rx_bytes or 0
+            agg['tx'] += r.tx_bytes or 0
+        apps = sorted(per_app.values(), key=lambda x: x['rx'] + x['tx'], reverse=True)[:12]
+
+        names = {d.id: d.name for d in Device.query.filter(Device.id.in_(ids)).all()}
+        site_rows = (BrowseEvent.query.filter(BrowseEvent.device_id.in_(ids), BrowseEvent.ts >= since)
+                     .order_by(BrowseEvent.ts.desc()).limit(15).all())
+        sites = [{'domain': s.domain or '', 'title': s.title or '', 'ts': s.ts,
+                   'device': names.get(s.device_id, '')} for s in site_rows]
+
+        return jsonify({'apps': apps, 'deviceTotal': dev_total, 'sites': sites, 'windowMs': window_ms})
+
     @app.route('/api/table/<name>')
     @viewer_required
     def api_table(name):

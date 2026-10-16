@@ -41,6 +41,8 @@ const T = {
     h:'س', m:'د', s:'ث', sessionsN:'جلسات',
     download:'تنزيل', upload:'رفع', dataUsage:'استهلاك الإنترنت', dataHourly:'الاستهلاك حسب الساعة',
     topDataApps:'الأكثر استهلاكاً للإنترنت', websitesPie:'توزيع المواقع', connPie:'نوع الاتصال', memPie:'الذاكرة',
+    liveNow:'الآن مباشرة', liveNowHint:'آخر {s} ثانية — يتحدث تلقائياً', liveNowApps:'استهلاك التطبيقات الآن',
+    liveNowSites:'آخر المواقع المفتوحة', liveNowEmpty:'لا نشاط خلال هذه الفترة', liveNowDevTotal:'إجمالي الجهاز',
     rx:'تنزيل', tx:'رفع', total:'الإجمالي', ip:'عنوان IP', rename:'إعادة تسمية', save:'حفظ', cancel:'إلغاء',
   editLabel:'تعديل الاسم', settings:'الإعدادات', emailReports:'تقارير البريد الإلكتروني',
     emailEnabled:'تفعيل الإرسال', smtpHost:'خادم SMTP', smtpPort:'المنفذ', smtpUser:'اسم المستخدم / البريد',
@@ -110,6 +112,8 @@ const T = {
     h:'h', m:'m', s:'s', sessionsN:'Sessions',
     download:'Download', upload:'Upload', dataUsage:'Data usage', dataHourly:'Usage by hour',
     topDataApps:'Heaviest data users', websitesPie:'Sites breakdown', connPie:'Connection type', memPie:'Memory',
+    liveNow:'Live now', liveNowHint:'Last {s}s — updates automatically', liveNowApps:'App data usage right now',
+    liveNowSites:'Recently opened sites', liveNowEmpty:'No activity in this window', liveNowDevTotal:'Device total',
     rx:'Download', tx:'Upload', total:'Total', ip:'IP address', rename:'Rename', save:'Save', cancel:'Cancel',
   editLabel:'Edit name', settings:'Settings', emailReports:'Email reports',
     emailEnabled:'Enable sending', smtpHost:'SMTP host', smtpPort:'Port', smtpUser:'Username / email',
@@ -382,6 +386,7 @@ async function renderOverview() {
   const siteParts = d.topDomains.map(x => ({ name: x.domain, v: x.count }));
 
   $('#main').innerHTML = `
+    <div class="card live-card" id="liveNowCard"></div>
     <div class="grid kpis" style="margin-bottom:16px">${kp}</div>
     <div class="grid cols2">
       <div class="card"><h3>${t('dailyUse')}</h3>${barChart(cur, prev)}<div class="legend"><span><i style="background:var(--teal)"></i>${t('current')}</span><span><i style="background:#aebfcc"></i>${t('previous')}</span></div></div>
@@ -397,6 +402,49 @@ async function renderOverview() {
       <div class="card"><h3>${t('websitesPie')}</h3>${pieChart(siteParts, v => String(v))}</div>
       <div class="card"><h3>${t('connPie')}</h3>${pieChart(transParts, v => fmtDur(v))}</div>
     </div>`;
+  renderLiveNow();
+}
+
+const LIVE_WINDOW_S = 90;
+// A short, fast-refreshing feed of "what's using data / what site was just
+// opened" in the last LIVE_WINDOW_S seconds — separate from the rest of
+// Overview, which follows the dashboard's from/to period and 8s refresh.
+// Only reflects reality once the phone's own sampling is fast too (the
+// live-sync setting — see CollectorService.java); with the old fixed
+// 15-minute TrafficStats polling this card would have sat empty almost
+// all the time, which is why it didn't exist until that was fixed.
+async function renderLiveNow() {
+  const host = $('#liveNowCard');
+  if (!host) return; // overview tab navigated away before this resolved
+  let d;
+  try { d = await api(`/api/live?window=${LIVE_WINDOW_S * 1000}&` + qs()); } catch (e) { return; }
+  if ($('#liveNowCard') !== host) return; // stale response from a since-replaced card
+  const apps = d.apps || [], sites = d.sites || [];
+  const appRows = apps.length ? apps.map(a => `
+    <div class="liverow"><span class="nm" title="${esc(a.label)}">${esc(a.label)}</span>
+      <span class="liveval">↓${esc(fmtBytes(a.rx))} ↑${esc(fmtBytes(a.tx))}</span></div>`).join('')
+    : `<div class="empty small">${t('liveNowEmpty')}</div>`;
+  const siteRows = sites.length ? sites.map(s => `
+    <div class="liverow"><span class="nm" title="${esc(s.title || s.domain)}">${esc(s.domain || s.title || '—')}</span>
+      <span class="liveval muted">${esc(fmtTs(s.ts))}</span></div>`).join('')
+    : `<div class="empty small">${t('liveNowEmpty')}</div>`;
+  host.innerHTML = `
+    <h3><span class="live-dot"></span>${t('liveNow')}
+      <span class="live-sub">${t('liveNowHint').replace('{s}', LIVE_WINDOW_S)}</span></h3>
+    <div class="grid cols2 live-grid">
+      <div><h4>${t('liveNowApps')}</h4>${appRows}</div>
+      <div><h4>${t('liveNowSites')}</h4>${siteRows}</div>
+    </div>`;
+}
+// Keeps the Overview tab's "live now" feed current on its own cadence —
+// independent of the general 8s dashboard refresh, which would otherwise
+// tear down and rebuild the whole Overview (losing scroll position,
+// flashing every chart) just to update one small card.
+function startLiveNow() {
+  setInterval(() => {
+    if (S.tab !== 'overview' || document.hidden) return;
+    renderLiveNow();
+  }, 4000);
 }
 
 // ── generic table (sticky header, frozen columns, sort, select) ───────────
@@ -1237,6 +1285,7 @@ async function init() {
   paintStatic();
   initChartTooltip();
   startDevicesLive();
+  startLiveNow();
   if (K.kiosk) {
     S.tab = 'overview'; S.period = 'd7';
     const tick = () => { const c = $('#clock'); if (c) { const d = new Date(); c.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`; } };
