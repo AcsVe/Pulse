@@ -32,6 +32,9 @@ const T = {
     app:'التطبيق', package:'الحزمة', time:'المدة', share:'النسبة', last:'آخر استخدام', change:'التغيير', avg:'متوسط الجلسة',
     prevTime:'المدة السابقة', date:'التاريخ', device:'الجهاز', domain:'الموقع', url:'الرابط', title:'العنوان', source:'المصدر',
     browser:'المتصفح', start:'البداية', end:'النهاية', duration:'المدة', kind:'الحالة', transport:'الشبكة', detail:'تفاصيل', ongoing:'مستمر',
+    category:'التصنيف', catEmail:'بريد إلكتروني', catSocial:'تواصل اجتماعي', catVideo:'فيديو وبث', catGaming:'ألعاب',
+    catShopping:'تسوق', catNews:'أخبار', catEducation:'تعليم', catProductivity:'إنتاجية ومكاتب', catSearch:'بحث',
+    catFinance:'مالية ومصرفية', catGovernment:'حكومي', catOther:'أخرى',
     search:'بحث…', all:'الكل', selected:'المحدد', exportCsv:'تصدير CSV', del:'حذف المحدد', confirmDel:'هل تريد حذف العناصر المحددة؟ لا يمكن التراجع.',
     deleted:'تم الحذف', noData:'لا توجد بيانات في هذه الفترة', accessibility:'شريط العنوان', dns:'DNS',
     addDevice:'إضافة جهاز', deviceName:'اسم الجهاز (مثال: هاتف أحمد)', create:'إنشاء', enrollCode:'رمز الربط',
@@ -103,6 +106,9 @@ const T = {
     app:'App', package:'Package', time:'Time', share:'Share', last:'Last used', change:'Change', avg:'Avg session',
     prevTime:'Previous time', date:'Date', device:'Device', domain:'Site', url:'URL', title:'Title', source:'Source',
     browser:'Browser', start:'Start', end:'End', duration:'Duration', kind:'State', transport:'Network', detail:'Detail', ongoing:'Ongoing',
+    category:'Category', catEmail:'Email', catSocial:'Social media', catVideo:'Video & streaming', catGaming:'Gaming',
+    catShopping:'Shopping', catNews:'News', catEducation:'Education', catProductivity:'Productivity', catSearch:'Search',
+    catFinance:'Finance & banking', catGovernment:'Government', catOther:'Other',
     search:'Search…', all:'All', selected:'Selected', exportCsv:'Export CSV', del:'Delete selected', confirmDel:'Delete the selected items? This cannot be undone.',
     deleted:'Deleted', noData:'No data in this period', accessibility:'Address bar', dns:'DNS',
     addDevice:'Add device', deviceName:'Device name (e.g. Ahmed phone)', create:'Create', enrollCode:'Enrollment code',
@@ -617,6 +623,14 @@ function wirePollEdit(host, reload) {
 // ── tab renderers ─────────────────────────────────────────────────────────
 async function renderApps() {
   const rows = await api('/api/table/apps?' + qs());
+  // Same fix as Overview/Devices (see renderOverview): the 8s auto-refresh
+  // was tearing down and rebuilding this whole table every tick even when
+  // nothing in it had changed, which is what kept flickering on tabs other
+  // than Overview/Devices even after those two were fixed — and also reset
+  // the user's current sort and scroll position on every tick.
+  const sig = JSON.stringify(rows);
+  if (sig === S._appsSig && $('#tbl')) return;
+  S._appsSig = sig;
   $('#main').innerHTML = '<div class="card" id="tbl"></div>';
   const tbl = $('#tbl');
   makeTable(tbl, { id: 'apps', id_: 'id', rows, sortKey: 'ms', deletable: 'apps', reload: renderApps, freeze: 1, cols: [
@@ -634,6 +648,9 @@ async function renderApps() {
 }
 async function renderData() {
   const rows = await api('/api/table/data?' + qs());
+  const sig = JSON.stringify(rows);
+  if (sig === S._dataSig && $('#tbl')) return;
+  S._dataSig = sig;
   $('#main').innerHTML = '<div class="card" id="tbl"></div>';
   const tbl = $('#tbl');
   makeTable(tbl, { id: 'data', id_: 'id', rows, sortKey: 'total', deletable: 'data', reload: renderData, freeze: 1, cols: [
@@ -646,8 +663,15 @@ async function renderData() {
   ] });
   wireLabelEdits(tbl, renderData);
 }
+const CAT_KEY = { email: 'catEmail', social: 'catSocial', video: 'catVideo', gaming: 'catGaming',
+  shopping: 'catShopping', news: 'catNews', education: 'catEducation', productivity: 'catProductivity',
+  search: 'catSearch', finance: 'catFinance', government: 'catGovernment', other: 'catOther' };
+const catLabel = c => t(CAT_KEY[c] || 'catOther');
 async function renderBrowse() {
   const rows = await api('/api/table/browse?' + qs());
+  const sig = JSON.stringify(rows);
+  if (sig === S._browseSig && $('#tbl')) return;
+  S._browseSig = sig;
   $('#main').innerHTML = '<div class="card" id="tbl"></div>';
   makeTable($('#tbl'), { id: 'browse', id_: 'id', rows, sortKey: 'ts', deletable: 'browse', reload: renderBrowse, freeze: 1, cols: [
     // DNS-sourced rows only ever capture the domain being looked up, never
@@ -656,6 +680,7 @@ async function renderBrowse() {
     // makes every row clickable instead of only the accessibility-sourced
     // ones that happen to have a full url.
     { k: 'domain', label: t('domain'), w: 200, html: x => linkify(x.domain, x.url || x.domain), text: x => x.domain },
+    { k: 'category', label: t('category'), w: 140, html: x => `<span class="cat-badge">${esc(catLabel(x.category))}</span>`, text: x => catLabel(x.category) },
     { k: 'ts', label: t('date'), fmt: fmtTs, w: 150 },
     { k: 'title', label: t('title'), wrap: true, w: 220 },
     { k: 'url', label: t('url'), wrap: true, w: 300, html: x => linkify(x.url, x.url), text: x => x.url },
@@ -666,6 +691,9 @@ async function renderBrowse() {
 }
 async function renderNet() {
   const rows = await api('/api/table/net?' + qs());
+  const sig = JSON.stringify(rows);
+  if (sig === S._netSig && $('#tbl')) return;
+  S._netSig = sig;
   $('#main').innerHTML = '<div class="card" id="tbl"></div>';
   makeTable($('#tbl'), { id: 'net', id_: 'id', rows, sortKey: 'start', deletable: 'net', reload: renderNet, freeze: 1, cols: [
     { k: 'kind', label: t('kind'), w: 170, html: x => kindBadge(x.kind), text: x => t(x.kind) },
@@ -942,6 +970,16 @@ async function resetUserPassword(id, reload) {
 }
 async function renderUsers() {
   const [users, devices] = await Promise.all([api('/api/users'), api('/api/devices')]);
+  // Same dedupe as the other tables, plus a focus guard like Devices tab's
+  // (startDevicesLive): this tab has a live "add user" form above the
+  // table, and without this, the 8s auto-refresh was wiping out whatever
+  // an admin was mid-typing into it (username/password) every single tick,
+  // not just causing a visual flicker.
+  const ae = document.activeElement, main = $('#main');
+  if (ae && main && main.contains(ae) && ae.tagName !== 'BUTTON' && $('#tbl')) return;
+  const sig = JSON.stringify(users) + '|' + JSON.stringify(devices);
+  if (sig === S._usersSig && $('#tbl')) return;
+  S._usersSig = sig;
   $('#main').innerHTML = `
     <div class="card"><h3>${t('addUser')}</h3>
       <div class="formgrid">

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, or_
 
 from models import db, UsageSession, NetEvent, BrowseEvent, Device, DataUsage, DeviceSample, AppLabelOverride
+from site_categories import categorize_domain
 
 DAY = 86400000
 HOUR = 3600000
@@ -238,7 +239,8 @@ def browse_table(dev_ids, a, b, limit=5000):
         .order_by(BrowseEvent.ts.desc()).limit(limit)
     names = {d.id: d.name for d in Device.query.all()}
     return [{'id': r.id, 'ts': r.ts, 'device': names.get(r.device_id, ''), 'domain': r.domain or '',
-             'url': r.url or '', 'title': r.title or '', 'source': r.source, 'app': r.app or ''} for r in q]
+             'url': r.url or '', 'title': r.title or '', 'source': r.source, 'app': r.app or '',
+             'category': categorize_domain(r.domain)} for r in q]
 
 
 def net_table(dev_ids, a, b, now, limit=5000):

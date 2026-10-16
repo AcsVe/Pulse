@@ -57,7 +57,13 @@ button,input,select{font:inherit;color:inherit}
 main{padding:16px;max-width:1500px;margin:0 auto}
 .card{background:var(--card);border-radius:14px;box-shadow:0 1px 3px rgba(15,42,67,.08);padding:16px;margin-bottom:16px}
 .card h3{font-size:1rem;margin-bottom:12px;color:var(--navy)}
-.grid{display:grid;gap:14px}
+/* align-items:start (CSS grid default is stretch) — without it, every card
+   in a grid row was forced to match the tallest card in that row, so a
+   card holding nothing but a couple of small "no data" placeholders (e.g.
+   "App data usage" when a device hasn't reported any yet) still visually
+   took up as much height as a real, data-full neighbor like the Net or
+   Top apps/sites card next to it. Each card now sizes to its own content. */
+.grid{display:grid;gap:14px;align-items:start}
 .kpis{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
 .kpi{background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,42,67,.08);border-top:4px solid var(--teal)}
 /* "Live now" card (renderLiveNow in app.js) — the Overview tab's own fast
@@ -84,6 +90,7 @@ main{padding:16px;max-width:1500px;margin:0 auto}
 .kpi .v{font-size:1.7rem;font-weight:800;margin:4px 0;color:var(--navy)}
 .kpi .d{font-size:.78rem;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .delta{border-radius:999px;padding:1px 8px;font-weight:800;font-size:.76rem}
+.cat-badge{background:#e6eef6;color:#2d5b8f;border-radius:999px;padding:2px 10px;font-size:.78rem;white-space:nowrap}
 .delta.up-good,.delta.down-bad.x{background:#dff5e8;color:#11703f}
 .delta.good{background:#dff5e8;color:#11703f}.delta.bad{background:#fde4e4;color:#a82a2a}.delta.neutral{background:#e6eef6;color:#2d5b8f}.delta.none{background:#eef1f4;color:#6b7a87}
 .prev{color:var(--muted)}
