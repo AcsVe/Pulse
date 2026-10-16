@@ -23,7 +23,6 @@ public class CollectorService extends Service {
     private static final String CHANNEL_ID = "pulse_running";
     private static final int NOTIF_ID = 1001;
     private static final long POLL_MS = 60_000;
-    private static final long SYNC_MS = 120_000;
     private static final long DATA_POLL_MS = 15 * 60_000;  // TrafficStats: coarse buckets are plenty
     private static final long MEM_POLL_MS = 5 * 60_000;
 
@@ -41,7 +40,14 @@ public class CollectorService extends Service {
     };
     /** The dashboard's per-device "update interval" (Devices tab), clamped
      *  5s..1h — picked up from the kv store, which Uploader refreshes from
-     *  every sync response. Falls back to the default when unset. */
+     *  every sync response. Falls back to the default when unset.
+     *  Also drives syncTask below: this used to be the usage-poll cadence
+     *  only, while the actual upload-to-server was a separate, fixed
+     *  120-second timer — so the dashboard's "Update interval" field never
+     *  meant what it looked like it meant, and setting it to a few seconds
+     *  still left the server (and the devices table) up to 2 minutes stale.
+     *  One interval now governs both: how often this collects local usage
+     *  data AND how often it pushes it to the server. */
     private long currentPollMs() {
         try {
             int s = Integer.parseInt(Db.get(getApplicationContext()).getStr("poll_interval_s", "60"));
@@ -65,7 +71,7 @@ public class CollectorService extends Service {
     private final Runnable syncTask = new Runnable() {
         @Override public void run() {
             Uploader.syncOnce(getApplicationContext());
-            handler.postDelayed(this, SYNC_MS);
+            handler.postDelayed(this, currentPollMs());
         }
     };
 
