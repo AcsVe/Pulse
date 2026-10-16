@@ -115,6 +115,14 @@ Known limitations:
   optimization" exemption; there's no fully reliable workaround from the app
   side beyond asking the device owner to also whitelist it manually in the
   phone's own battery settings.
+- The "ignore battery optimization" exemption only stops the *system* from
+  deferring this app's jobs/network — it does nothing about the CPU itself
+  sleeping once the screen is off, which would otherwise leave the
+  poll/sync timers queued and not actually running, showing up on the
+  dashboard as a device stuck "Offline" despite being genuinely connected.
+  `CollectorService` holds a `PARTIAL_WAKE_LOCK` for as long as monitoring
+  is on specifically to prevent that; it's the accepted battery-use
+  tradeoff for last-seen data that's actually live.
 - `failed` vs `disconnected` is a heuristic (a disconnect within 10s of a
   connected/no-internet state is logged as `failed`), since Android doesn't
   expose "association failed" as a distinct signal to apps.
@@ -191,6 +199,12 @@ before.
   table opens a live view of that phone's screen with tap/swipe/text/back/
   home/recents control, run from the dashboard. See the dedicated section
   below for how it works and its platform limits.
+- **Visited-sites categories** — the Browse tab's table pairs every visited
+  domain with a category (email, social media, video & streaming, gaming,
+  shopping, news, education, productivity, search, finance, government, or
+  other), from a small static keyword-based classifier
+  (`server/site_categories.py`) — no outside lookup per row, just matching
+  against the domain already recorded.
 
 ### Remote screen view + control
 
@@ -203,13 +217,18 @@ While a session is active:
   real video stream, which keeps it on the same plain-HTTP infrastructure as
   the rest of the app instead of adding a WebSocket/WebRTC stack. Expect
   roughly 1fps-equivalent responsiveness, not game-quality mirroring.
-- Clicking/dragging on the dashboard's image sends tap/swipe commands; a
-  text box sends text to whatever field is focused on the phone; Back/Home/
-  Recents buttons send those global actions. All of this is carried out by
-  the same `AccessibilityService` already used for browser-URL capture
+- Clicking/dragging (or tapping/dragging — touch is supported, not just a
+  mouse, so this also works from the Admin app or a phone browser) on the
+  dashboard's image sends tap/swipe commands; a text box sends text to
+  whatever field is focused on the phone; Back/Home/Recents buttons send
+  those global actions. All of this is carried out by the same
+  `AccessibilityService` already used for browser-URL capture
   (`dispatchGesture` for tap/swipe, `ACTION_SET_TEXT` on the focused node for
   text, `performGlobalAction` for Back/Home/Recents) — so it needs that
-  permission enabled, same as URL capture does.
+  permission enabled, same as URL capture does. A fullscreen toggle (⛶) and
+  a brief tap-feedback ripple make the session itself feel closer to
+  AnyDesk/TeamViewer, though the underlying transport is still the polled
+  JPEG described above, not continuous video.
 
 **Platform limits, not implementation gaps:**
 - Android requires the device owner to grant screen-capture consent through
@@ -265,6 +284,13 @@ the same optional `ANDROID_KEYSTORE_*` signing secrets as the collector
 app, publishing `PulseAdmin.apk` to the repo's `admin-apk-latest` release —
 a separate release from the collector app's `apk-latest`, so one app
 updating doesn't disturb the other's stable download link.
+
+A side (drawer) menu replaces the old toolbar overflow — the ☰ toggle is
+always in the same place in the toolbar (not buried in a "⋮" menu), also
+responds to an edge swipe, and the drawer remembers whether it was last
+left open or closed across launches. Pinch-zoom is enabled (with the
+on-screen +/- controls hidden) as a fallback for any dashboard element a
+WebView's viewport math clips that Chrome itself wouldn't.
 
 No enrollment code needed — it's just a browser for the dashboard, so
 whoever already has a login signs in the same way they would on the web.
