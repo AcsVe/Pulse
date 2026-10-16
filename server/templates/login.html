@@ -5,21 +5,56 @@
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f2a43;font-family:'Tajawal',system-ui,sans-serif;color:#10222f}
-  form{background:#fff;border-radius:16px;padding:28px;width:min(380px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  .wrap{width:min(380px,92vw)}
+  .langbar{display:flex;justify-content:flex-end;margin-bottom:10px}
+  .langbtn{background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:8px;padding:6px 12px;cursor:pointer;font:inherit;font-weight:700;font-size:.82rem}
+  .langbtn:hover{background:rgba(255,255,255,.22)}
+  form{background:#fff;border-radius:16px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
   h1{font-size:1.6rem;margin-bottom:4px;color:#0f2a43;letter-spacing:.5px}
   h1 span{color:#0fb5a8}
   p{color:#5d7283;font-size:.9rem;margin-bottom:18px}
   label{display:block;font-weight:700;font-size:.85rem;margin:12px 0 5px}
   input{width:100%;padding:11px 12px;border:1.5px solid #cfdbe5;border-radius:10px;font:inherit}
   input:focus{outline:none;border-color:#0fb5a8;box-shadow:0 0 0 3px rgba(15,181,168,.15)}
-  button{margin-top:18px;width:100%;padding:12px;border:0;border-radius:10px;background:#0fb5a8;color:#fff;font:inherit;font-weight:800;cursor:pointer}
+  button[type=submit]{margin-top:18px;width:100%;padding:12px;border:0;border-radius:10px;background:#0fb5a8;color:#fff;font:inherit;font-weight:800;cursor:pointer}
   .err{background:#fde8e8;color:#9b1c1c;border-radius:8px;padding:8px 10px;font-size:.85rem;margin-bottom:6px}
 </style></head><body>
-<form method="post">
-  <h1>Pul<span>se</span></h1>
-  <p>لوحة رصد الأجهزة — تسجيل الدخول</p>
-  {% if error %}<div class="err">اسم المستخدم أو كلمة المرور غير صحيحة</div>{% endif %}
-  <label for="u">اسم المستخدم</label><input id="u" name="username" autocomplete="username" autofocus required>
-  <label for="p">كلمة المرور</label><input id="p" name="password" type="password" autocomplete="current-password" required>
-  <button type="submit">دخول</button>
-</form></body></html>
+<div class="wrap">
+  <div class="langbar"><button type="button" class="langbtn" id="langBtn"></button></div>
+  <form method="post">
+    <h1>Pul<span>se</span></h1>
+    <p id="tagline"></p>
+    {% if error %}<div class="err" id="errMsg"></div>{% endif %}
+    <label for="u" id="uLabel"></label><input id="u" name="username" autocomplete="username" autofocus required>
+    <label for="p" id="pLabel"></label><input id="p" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit" id="submitBtn"></button>
+  </form>
+</div>
+<script>
+  // Same localStorage key the dashboard itself uses (see app.js's setLang),
+  // so a language picked here carries straight through after signing in
+  // instead of landing back on the dashboard's own default.
+  const STR = {
+    ar: { tagline: 'لوحة رصد الأجهزة — تسجيل الدخول', err: 'اسم المستخدم أو كلمة المرور غير صحيحة',
+          u: 'اسم المستخدم', p: 'كلمة المرور', submit: 'دخول', toggle: 'EN' },
+    en: { tagline: 'Device monitoring dashboard — Sign in', err: 'Incorrect username or password',
+          u: 'Username', p: 'Password', submit: 'Sign in', toggle: 'عربي' },
+  };
+  function apply(l) {
+    const s = STR[l];
+    document.documentElement.lang = l; document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+    document.title = l === 'ar' ? 'Pulse — تسجيل الدخول' : 'Pulse — Sign in';
+    document.getElementById('tagline').textContent = s.tagline;
+    const err = document.getElementById('errMsg'); if (err) err.textContent = s.err;
+    document.getElementById('uLabel').textContent = s.u;
+    document.getElementById('pLabel').textContent = s.p;
+    document.getElementById('submitBtn').textContent = s.submit;
+    document.getElementById('langBtn').textContent = s.toggle;
+    try { localStorage.setItem('pulseLang', l); } catch (e) {}
+  }
+  let lang = 'ar';
+  try { lang = localStorage.getItem('pulseLang') || 'ar'; } catch (e) {}
+  apply(lang);
+  document.getElementById('langBtn').onclick = () => apply(lang = lang === 'ar' ? 'en' : 'ar');
+</script>
+</body></html>
