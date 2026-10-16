@@ -219,6 +219,21 @@ public class PulsePlugin extends Plugin {
         call.resolve();
     }
 
+    // "Live sync" toggle (status screen, next to Sync now): overrides the
+    // dashboard's per-device "Update interval" with a fixed fast interval
+    // (see CollectorService.LIVE_SYNC_MS) regardless of what that field is
+    // set to, for someone who wants the phone pushing as fast as possible
+    // right now without going to the dashboard to change it. Off reverts to
+    // the normal configured interval. Persisted so it survives a restart —
+    // CollectorService re-reads it on every cycle, no service restart needed.
+    @PluginMethod
+    public void setLiveSync(PluginCall call) {
+        boolean on = call.getBoolean("on", false);
+        Db.get(getContext()).putBool("live_sync", on);
+        if (on) Uploader.requestImmediateSync(getContext());
+        call.resolve();
+    }
+
     @PluginMethod
     public void getStatus(PluginCall call) {
         Db db = Db.get(getContext());
@@ -228,6 +243,7 @@ public class PulsePlugin extends Plugin {
         r.put("queueCount", db.countPending());
         r.put("iconHidden", IconVisibility.isHidden(getContext()));
         r.put("remoteCapable", db.getBool("remote_capable", false));
+        r.put("liveSync", db.getBool("live_sync", false));
         call.resolve(r);
     }
 

@@ -24,6 +24,10 @@ public class CollectorService extends Service {
     private static final int NOTIF_ID = 1001;
     private static final long POLL_MS = 60_000;
     private static final long DATA_POLL_MS = 15 * 60_000;  // TrafficStats: coarse buckets are plenty
+    // "Live sync" toggle on the status screen — overrides the configured
+    // interval with this fixed fast one while on, independent of whatever
+    // the dashboard's "Update interval" is set to.
+    private static final long LIVE_SYNC_MS = 5_000;
     private static final long MEM_POLL_MS = 5 * 60_000;
 
     private HandlerThread thread;
@@ -49,8 +53,10 @@ public class CollectorService extends Service {
      *  One interval now governs both: how often this collects local usage
      *  data AND how often it pushes it to the server. */
     private long currentPollMs() {
+        Db db = Db.get(getApplicationContext());
+        if (db.getBool("live_sync", false)) return LIVE_SYNC_MS;
         try {
-            int s = Integer.parseInt(Db.get(getApplicationContext()).getStr("poll_interval_s", "60"));
+            int s = Integer.parseInt(db.getStr("poll_interval_s", "60"));
             return Math.max(5, Math.min(s, 3600)) * 1000L;
         } catch (NumberFormatException e) {
             return POLL_MS;

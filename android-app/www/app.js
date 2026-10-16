@@ -8,6 +8,8 @@ const T = {
     permsTitle: 'الأذونات المطلوبة', permsHint: 'امنح كل إذن لتعمل كل الميزات بشكل صحيح', start: 'بدء المراقبة',
     runningTitle: 'المراقبة تعمل', device: 'الجهاز', server: 'الخادم', lastSync: 'آخر مزامنة', queued: 'بانتظار الإرسال',
     syncNow: 'مزامنة الآن', syncing: 'جارٍ المزامنة...', checkPerms: 'إعادة فحص الأذونات', stop: 'إيقاف المراقبة',
+    liveSyncOn: 'مزامنة حيّة: مفعّلة (كل 5 ثوانٍ)', liveSyncOff: 'مزامنة حيّة: متوقفة',
+    liveSyncHint: 'عند التفعيل، يرسل الهاتف بياناته كل 5 ثوانٍ بدلاً من فترة التحديث المحددة في لوحة التحكم — أسرع لكن يستهلك بطارية وبيانات أكثر.',
     hideIcon: 'إخفاء الأيقونة', showIconBtn: 'إظهار الأيقونة',
     iconHint: 'يبقى إشعار التشغيل ظاهراً دائماً (يفرضه نظام أندرويد) — اضغط عليه في أي وقت لإعادة إظهار الأيقونة وفتح التطبيق.',
     hideConfirm: 'ستختفي أيقونة التطبيق من قائمة التطبيقات. للعودة إليه لاحقاً: اضغط على إشعار "Pulse" الثابت في شريط الإشعارات. متابعة؟',
@@ -36,6 +38,8 @@ const T = {
     permsTitle: 'Required permissions', permsHint: 'Grant each permission so every feature works correctly', start: 'Start monitoring',
     runningTitle: 'Monitoring is running', device: 'Device', server: 'Server', lastSync: 'Last sync', queued: 'Queued',
     syncNow: 'Sync now', syncing: 'Syncing...', checkPerms: 'Recheck permissions', stop: 'Stop monitoring',
+    liveSyncOn: 'Live sync: On (every 5s)', liveSyncOff: 'Live sync: Off',
+    liveSyncHint: 'When on, the phone sends its data every 5 seconds instead of the dashboard\'s configured interval — faster, but uses more battery and data.',
     hideIcon: 'Hide app icon', showIconBtn: 'Show app icon',
     iconHint: 'The running notification always stays visible (required by Android) — tap it any time to bring the icon back and reopen the app.',
     hideConfirm: 'The app icon will disappear from your app list. To get back in later: tap the persistent "Pulse" notification. Continue?',
@@ -140,6 +144,12 @@ async function refreshStatus() {
   if (remoteBtn) {
     remoteBtn.textContent = st.remoteCapable ? (t('remoteOn') + ' — ' + t('disableRemote')) : t('enableRemote');
     remoteBtn.dataset.on = st.remoteCapable ? '1' : '0';
+  }
+  const liveSyncBtn = $('#liveSyncBtn');
+  if (liveSyncBtn) {
+    liveSyncBtn.textContent = st.liveSync ? t('liveSyncOn') : t('liveSyncOff');
+    liveSyncBtn.classList.toggle('primary', !!st.liveSync);
+    liveSyncBtn.dataset.on = st.liveSync ? '1' : '0';
   }
 }
 
@@ -257,6 +267,12 @@ async function init() {
       [800, 2000, 4000].forEach(ms => setTimeout(refreshStatus, ms));
       setTimeout(() => { btn.disabled = false; btn.textContent = label; }, 2200);
     }
+  };
+  $('#liveSyncBtn').onclick = async () => {
+    const p = Pulse(); if (!p) return;
+    const on = $('#liveSyncBtn').dataset.on === '1';
+    await p.setLiveSync({ on: !on });
+    refreshStatus();
   };
   $('#remoteBtn').onclick = async () => {
     const p = Pulse(); if (!p) return;
