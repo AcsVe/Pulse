@@ -243,7 +243,7 @@ public class PulsePlugin extends Plugin {
         r.put("queueCount", db.countPending());
         r.put("iconHidden", IconVisibility.isHidden(getContext()));
         r.put("remoteCapable", db.getBool("remote_capable", false));
-        r.put("liveSync", db.getBool("live_sync", false));
+        r.put("liveSync", db.getBool("live_sync", true));
         call.resolve(r);
     }
 

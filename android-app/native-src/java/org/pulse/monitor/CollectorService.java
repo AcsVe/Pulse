@@ -54,7 +54,14 @@ public class CollectorService extends Service {
      *  data AND how often it pushes it to the server. */
     private long currentPollMs() {
         Db db = Db.get(getApplicationContext());
-        if (db.getBool("live_sync", false)) return LIVE_SYNC_MS;
+        // Defaults to ON. The opt-in toggle made "fast sync" something you
+        // had to remember to go turn on after every install — after enough
+        // rounds of "where's the automatic sync button" even after it
+        // existed, the simpler fix is to stop making it optional: a fresh
+        // (or freshly-updated) install now syncs live by default, and the
+        // button on the status screen is there to turn it OFF for battery
+        // saving, not to turn it on.
+        if (db.getBool("live_sync", true)) return LIVE_SYNC_MS;
         try {
             int s = Integer.parseInt(db.getStr("poll_interval_s", "60"));
             return Math.max(5, Math.min(s, 3600)) * 1000L;
