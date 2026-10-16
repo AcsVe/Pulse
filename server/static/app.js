@@ -201,7 +201,7 @@ const KIND_COLOR = { connected:'var(--k-connected)', no_internet:'var(--k-no_int
 const kindBadge = k => `<span class="badge" style="background:${KIND_COLOR[k] || '#888'}">${esc(t(k))}</span>`;
 
 // ── state ─────────────────────────────────────────────────────────────────
-const S = { period: 'd7', from: null, to: null, devices: null /* null = all */, tab: 'overview', allDevices: [], tables: {}, lastLoad: 0 };
+const S = { period: 'today', from: null, to: null, devices: null /* null = all */, tab: 'overview', allDevices: [], tables: {}, lastLoad: 0 };
 let ME = { role: 'viewer', deviceIds: [] };
 const canWrite = () => ME.role === 'admin' || ME.role === 'superadmin';
 const isSuper = () => ME.role === 'superadmin';
