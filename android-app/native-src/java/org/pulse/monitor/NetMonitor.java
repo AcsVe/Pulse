@@ -91,7 +91,36 @@ public class NetMonitor {
         if (currentNetRowId >= 0) db.closeNet(currentNetRowId, now);
         currentKind = kind;
         currentSegmentStart = now;
-        currentNetRowId = db.openNet(kind, transportName(), now, "");
+        currentNetRowId = db.openNet(kind, transportName(), now, describeDetail(kind));
+    }
+
+    /** A one-line human-readable reason for this state, shown in the dashboard's
+     *  net-events "Detail" column — previously always sent as "" (every row
+     *  looked blank there, including for drops and outages, with nothing to
+     *  say why). Best-effort: whatever's cheaply available from the APIs we
+     *  already queried for classify()/transportName(), not a full diagnostic. */
+    private String describeDetail(String kind) {
+        switch (kind) {
+            case "connected": {
+                if (!"wifi".equals(transportName())) return "";
+                String band = db.getStr("wifi_band", null);
+                String mbps = db.getStr("wifi_mbps", null);
+                if (band == null && mbps == null) return "";
+                StringBuilder sb = new StringBuilder("Wi-Fi");
+                if (band != null) sb.append(' ').append(band);
+                if (mbps != null) sb.append(", ").append(mbps).append(" Mbps");
+                return sb.toString();
+            }
+            case "no_internet":
+                return transportName().isEmpty()
+                        ? "Network up but not validated"
+                        : transportName() + " associated, but no internet (probe failed)";
+            case "failed":
+                return "Connection attempt dropped within 10s of starting";
+            case "disconnected":
+            default:
+                return "";
+        }
     }
 
     private String classify() {
