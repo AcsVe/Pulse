@@ -454,9 +454,21 @@ async function renderLiveNow() {
   try { d = await api(`/api/live?window=${LIVE_WINDOW_S * 1000}&` + qs()); } catch (e) { return; }
   if ($('#liveNowCard') !== host) return; // stale response from a since-replaced card
   const apps = d.apps || [], sites = d.sites || [];
+  const dt = d.deviceTotal || { rx: 0, tx: 0 };
+  // Per-app attribution needs a NetworkStatsManager per-UID query that can
+  // legitimately come back empty on some OEM/Android-version combinations
+  // even while the device-wide total (plain TrafficStats, no per-UID API
+  // needed) keeps recording fine — this card used to show "No activity"
+  // in that case regardless of real traffic. deviceTotal was already in
+  // every /api/live response (and liveNowDevTotal already translated) but
+  // never actually rendered here; fall back to it instead of just the
+  // empty state when there's nothing to break down by app.
   const appRows = apps.length ? apps.map(a => `
     <div class="liverow"><span class="nm" title="${esc(a.label)}">${esc(a.label)}</span>
       <span class="liveval">↓${esc(fmtBytes(a.rx))} ↑${esc(fmtBytes(a.tx))}</span></div>`).join('')
+    : (dt.rx || dt.tx) ? `
+    <div class="liverow"><span class="nm">${esc(t('liveNowDevTotal'))}</span>
+      <span class="liveval">↓${esc(fmtBytes(dt.rx))} ↑${esc(fmtBytes(dt.tx))}</span></div>`
     : `<div class="empty small">${t('liveNowEmpty')}</div>`;
   const siteRows = sites.length ? sites.map(s => `
     <div class="liverow"><span class="nm" title="${esc(s.title || s.domain)}">${esc(s.domain || s.title || '—')}</span>
@@ -660,7 +672,9 @@ async function renderData() {
   $('#main').innerHTML = '<div class="card" id="tbl"></div>';
   const tbl = $('#tbl');
   makeTable(tbl, { id: 'data', id_: 'id', rows, sortKey: 'total', deletable: 'data', reload: renderData, freeze: 1, cols: [
-    { k: 'label', label: t('app'), w: 200, html: x => labelCell(x.package, x.label), text: x => x.label },
+    { k: 'label', label: t('app'), w: 200,
+      html: x => x.package === '__device__' ? `<span class="lbl">${esc(t('liveNowDevTotal'))}</span>` : labelCell(x.package, x.label),
+      text: x => x.package === '__device__' ? t('liveNowDevTotal') : x.label },
     { k: 'rx', label: t('rx'), num: true, fmt: v => fmtBytes(v), w: 110 },
     { k: 'tx', label: t('tx'), num: true, fmt: v => fmtBytes(v), w: 110 },
     { k: 'total', label: t('total'), num: true, fmt: v => fmtBytes(v), w: 110 },

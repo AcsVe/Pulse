@@ -146,6 +146,19 @@ def data_usage_table(dev_ids, a, b):
         t = d['rx'] + d['tx']
         rows.append({'id': pkg, 'package': pkg, 'label': d['label'], 'rx': d['rx'], 'tx': d['tx'],
                      'total': t, 'share': (t / total * 100) if total else 0})
+    # Per-app attribution needs NetworkStatsManager.queryDetailsForUid per app,
+    # which can legitimately come back empty on some OEM/Android-version
+    # combinations (DataUsageCollector.queryStatsForUid skips a uid rather
+    # than report a false zero when that query fails) even while the
+    # whole-device total (plain TrafficStats, no per-UID API involved) keeps
+    # recording fine. Since stats['apps'] is the only thing this table ever
+    # listed, a device stuck in that state showed "No data in this period"
+    # here forever — real traffic was being recorded the whole time, just
+    # never surfaced because it couldn't be split by app. Fall back to one
+    # row for the device total so real usage is never hidden entirely.
+    if not rows and total:
+        rows.append({'id': '__device__', 'package': '__device__', 'label': None,
+                     'rx': stats['totalRx'], 'tx': stats['totalTx'], 'total': total, 'share': 100.0})
     return rows
 
 
