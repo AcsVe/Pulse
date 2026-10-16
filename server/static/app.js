@@ -75,7 +75,7 @@ const T = {
     remoteStale:'البث متوقف — الصورة المعروضة ليست حيّة (آخر صورة وصلت منذ لحظات ولم تتحدث)',
     remoteBack:'رجوع', remoteHome:'الرئيسية', remoteRecents:'الأخيرة', remoteSendText:'إرسال نص',
     remoteTextPh:'اكتب نصاً لإرساله إلى الحقل المُركَّز عليه في الهاتف', remoteHint:'انقر على الصورة للنقر على الهاتف. اسحب للتمرير.',
-    remoteZoomIn:'تكبير', remoteZoomOut:'تصغير', remoteClose:'إغلاق', remoteApps:'التطبيقات',
+    remoteZoomIn:'تكبير', remoteZoomOut:'تصغير', remoteClose:'إغلاق', remoteApps:'التطبيقات', remoteFullscreen:'ملء الشاشة',
     remoteAppsSearch:'ابحث عن تطبيق…', remoteAppsLoading:'جارٍ جلب قائمة التطبيقات من الهاتف…',
     remoteAppsEmpty:'لا توجد تطبيقات — جرّب فتح لوحة التحكم مرة أخرى بعد قليل.', remoteAppsNone:'لا نتائج',
     remoteLaunch:'فتح', remoteCloseApp:'إغلاق التطبيق',
@@ -148,7 +148,7 @@ const T = {
     remoteStale:"Stream stalled — the picture shown isn't live (the last frame stopped updating)",
     remoteBack:'Back', remoteHome:'Home', remoteRecents:'Recents', remoteSendText:'Send text',
     remoteTextPh:'Type text to send to the focused field on the phone', remoteHint:'Click the image to tap on the phone. Drag to swipe.',
-    remoteZoomIn:'Zoom in', remoteZoomOut:'Zoom out', remoteClose:'Close', remoteApps:'Apps',
+    remoteZoomIn:'Zoom in', remoteZoomOut:'Zoom out', remoteClose:'Close', remoteApps:'Apps', remoteFullscreen:'Fullscreen',
     remoteAppsSearch:'Search for an app…', remoteAppsLoading:'Fetching the app list from the phone…',
     remoteAppsEmpty:'No apps yet — try reopening remote control in a moment.', remoteAppsNone:'No matches',
     remoteLaunch:'Open', remoteCloseApp:'Close app',
@@ -1051,6 +1051,7 @@ function openRemotePanel(id, name) {
         <h3>${esc(t('remote'))} — ${esc(name)}</h3>
         <div class="remote-head-actions">
           <button class="rcicon" id="rcAppsBtn" title="${esc(t('remoteApps'))}">⊞</button>
+          <button class="rcicon" id="rcFull" title="${esc(t('remoteFullscreen'))}">⛶</button>
           <button class="rcicon" id="rcClose" title="${esc(t('remoteClose'))}">✕</button>
         </div>
       </div>
@@ -1085,6 +1086,7 @@ function openRemotePanel(id, name) {
   $('#rcZoomIn').onclick = () => { RC.zoom = Math.min(2.5, RC.zoom + 0.25); img0.style.transform = `scale(${RC.zoom})`; };
   $('#rcZoomOut').onclick = () => { RC.zoom = Math.max(1, RC.zoom - 0.25); img0.style.transform = `scale(${RC.zoom})`; };
   $('#rcClose').onclick = closeRemotePanel;
+  $('#rcFull').onclick = () => $('.remote-box').classList.toggle('rc-full');
   $('#rcBack').onclick = () => remoteCmd({ action: 'back' });
   $('#rcHome').onclick = () => remoteCmd({ action: 'home' });
   $('#rcRecents').onclick = () => remoteCmd({ action: 'recents' });
@@ -1120,25 +1122,55 @@ function openRemotePanel(id, name) {
       const stale = $('#rcStale'); if (stale) stale.classList.add('hidden');
     }
   };
-  img.onmousedown = e => {
-    e.preventDefault();
-    const r = img.getBoundingClientRect();
-    RC.drag = { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height, t: Date.now() };
+  // Instant visual feedback for a tap/click landing — a 300ms frame poll
+  // can't itself show the result that fast, and without this the panel
+  // felt unresponsive compared to AnyDesk/TeamViewer's live cursor, even
+  // though the command had actually gone through.
+  const tapFx = (px, py) => {
+    const wrap = $('.remote-screen-wrap'); if (!wrap) return;
+    const fx = el('div', { className: 'rc-tap-fx' });
+    const ir = img.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+    fx.style.left = (ir.left - wr.left + px) + 'px';
+    fx.style.top = (ir.top - wr.top + py) + 'px';
+    wrap.appendChild(fx);
+    setTimeout(() => fx.remove(), 420);
   };
-  img.onmouseup = e => {
+  const startDrag = (clientX, clientY) => {
+    const r = img.getBoundingClientRect();
+    RC.drag = { x: clientX - r.left, y: clientY - r.top, w: r.width, h: r.height, t: Date.now() };
+  };
+  const endDrag = (clientX, clientY) => {
     if (!RC.drag) return;
     const r = img.getBoundingClientRect();
-    const x2 = e.clientX - r.left, y2 = e.clientY - r.top;
+    const x2 = clientX - r.left, y2 = clientY - r.top;
     const dx = x2 - RC.drag.x, dy = y2 - RC.drag.y;
     const toDevX = px => Math.round((px / RC.drag.w) * (RC.w || img.naturalWidth || 1080));
     const toDevY = px => Math.round((px / RC.drag.h) * (RC.h || img.naturalHeight || 1920));
     if (Math.hypot(dx, dy) < 12) {
+      tapFx(RC.drag.x, RC.drag.y);
       remoteCmd({ action: 'tap', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y) });
     } else {
+      tapFx(x2, y2);
       remoteCmd({ action: 'swipe', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y), x2: toDevX(x2), y2: toDevY(y2),
                   duration: Math.max(80, Math.min(1200, Date.now() - RC.drag.t)) });
     }
     RC.drag = null;
+  };
+  img.onmousedown = e => { e.preventDefault(); startDrag(e.clientX, e.clientY); };
+  img.onmouseup = e => endDrag(e.clientX, e.clientY);
+  // Touch support: mouse-only handlers meant tap/swipe never worked when
+  // the admin used their own touchscreen (phone/tablet browser, or the
+  // Admin app's WebView) instead of a mouse — a real gap for an app that's
+  // meant to be used from a phone.
+  img.ontouchstart = e => {
+    e.preventDefault();
+    const tt = e.changedTouches[0];
+    if (tt) startDrag(tt.clientX, tt.clientY);
+  };
+  img.ontouchend = e => {
+    e.preventDefault();
+    const tt = e.changedTouches[0];
+    if (tt) endDrag(tt.clientX, tt.clientY);
   };
   jpost(`/api/devices/${id}/remote/start`, {}, 'POST');
   tickRemoteFrame();
