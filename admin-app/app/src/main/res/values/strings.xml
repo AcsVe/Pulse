@@ -8,4 +8,6 @@
     <string name="server_url_save">Connect</string>
     <string name="server_url_empty">Enter a server address first</string>
     <string name="load_error">Couldn\'t reach %1$s — check the address and your connection, then pull down to retry.</string>
+    <string name="drawer_open">Open navigation menu</string>
+    <string name="drawer_close">Close navigation menu</string>
 </resources>

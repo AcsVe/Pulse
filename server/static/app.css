@@ -3,6 +3,15 @@
   --bg:#eef3f7; --card:#fff; --text:#10222f; --muted:#5d7283; --line:#dbe5ec;
   --good:#1a9d5b; --bad:#d64545; --warn:#e08a1e; --info:#3a7bd5; --grey:#7b8a97;
   --k-connected:#1a9d5b; --k-no_internet:#e08a1e; --k-failed:#d64545; --k-disconnected:#5d6b78;
+  /* Setting color-scheme only on the <input> itself (below) styles the field
+     but several mobile browsers (notably Chrome on Android) still render
+     the native calendar/time *picker overlay* using the system's dark-mode
+     palette if the page's computed color-scheme isn't also declared at the
+     document root — on a dark-mode phone that meant white digits on the
+     picker's own white default background, unreadable. This page has no
+     dark theme of its own, so declaring it root-wide is accurate, not just
+     a workaround. */
+  color-scheme: light;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px}
@@ -243,7 +252,13 @@ body.kiosk svg text{fill:#bcd0de}
 .remote-app-row:hover{background:rgba(255,255,255,.06)}
 .remote-app-label{flex:1;font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:760px){
-  .top{padding:8px 12px} .tabs{top:auto;position:static} main{padding:10px}
+  /* Tabs used to go position:static on mobile (non-sticky) — scrolling down
+     any tab meant scrolling all the way back up just to switch tabs or use
+     a header button. .tabs already tracks the header's real (possibly
+     2-line-wrapped) height via --top-h/ResizeObserver (see syncStickyOffsets
+     in app.js), so keeping it sticky here needs no separate mobile logic —
+     the same mechanism that works on desktop just works here too. */
+  .top{padding:8px 12px} main{padding:10px}
   .cols2{grid-template-columns:1fr}
   .tw{max-height:min(72vh,560px)}
   .kpis{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}

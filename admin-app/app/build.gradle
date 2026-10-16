@@ -32,4 +32,8 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     implementation 'com.google.android.material:material:1.12.0'
+    // material pulls this in transitively, but the drawer is a core part of
+    // this screen (not an incidental widget), so it's declared directly
+    // rather than relying on another library's transitive graph.
+    implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
 }

@@ -6,8 +6,6 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Patterns;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -15,11 +13,16 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import com.google.android.material.navigation.NavigationView;
 
 /**
  * Pulse Admin: a thin WebView wrapper around the Pulse dashboard an admin
@@ -38,10 +41,16 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 public class MainActivity extends AppCompatActivity {
     private static final String PREFS = "pulse_admin";
     private static final String KEY_SERVER_URL = "server_url";
+    // Whether the admin last left the drawer open or closed — restored on
+    // the next launch so the menu doesn't reset to "closed" every time
+    // (that's the "remembers the menu's position" part of the request).
+    private static final String KEY_DRAWER_OPEN = "drawer_open";
 
     private WebView webView;
     private SwipeRefreshLayout swipe;
     private SharedPreferences prefs;
+    private DrawerLayout drawerLayout;
+    private TextView navServer;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -52,6 +61,45 @@ public class MainActivity extends AppCompatActivity {
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+
+        drawerLayout = findViewById(R.id.drawer_layout);
+        NavigationView navView = findViewById(R.id.nav_view);
+
+        // ActionBarDrawerToggle draws its own animated hamburger/arrow icon
+        // (no drawable resource needed) and wires it to the toolbar, plus
+        // handles the edge-swipe-to-open gesture — this is the persistent
+        // "مرسال" toggle: it's always in the same spot in the toolbar,
+        // never buried in an overflow menu.
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
+                this, drawerLayout, toolbar, R.string.drawer_open, R.string.drawer_close) {
+            @Override
+            public void onDrawerOpened(android.view.View drawerView) {
+                super.onDrawerOpened(drawerView);
+                prefs.edit().putBoolean(KEY_DRAWER_OPEN, true).apply();
+            }
+
+            @Override
+            public void onDrawerClosed(android.view.View drawerView) {
+                super.onDrawerClosed(drawerView);
+                prefs.edit().putBoolean(KEY_DRAWER_OPEN, false).apply();
+            }
+        };
+        drawerLayout.addDrawerListener(toggle);
+        toggle.syncState();
+
+        navServer = navView.getHeaderView(0).findViewById(R.id.nav_header_server);
+        navView.setNavigationItemSelectedListener(item -> {
+            drawerLayout.closeDrawers();
+            int id = item.getItemId();
+            if (id == R.id.action_reload) {
+                webView.reload();
+                return true;
+            } else if (id == R.id.action_change_server) {
+                promptForServerUrl(false);
+                return true;
+            }
+            return false;
+        });
 
         webView = findViewById(R.id.webview);
         swipe = findViewById(R.id.swipe);
@@ -64,7 +112,25 @@ public class MainActivity extends AppCompatActivity {
         ws.setDomStorageEnabled(true);
         ws.setLoadWithOverviewMode(true);
         ws.setUseWideViewPort(true);
-        ws.setSupportZoom(false);
+        // The dashboard's own CSS already handles mobile widths, but a
+        // WebView's viewport math isn't always identical to Chrome's, so a
+        // wide table or a card that assumes slightly more room than is
+        // actually there can get clipped off the right/bottom edge with no
+        // way to reach it. Disabling zoom (as this did before) removes the
+        // user's only escape hatch for that case. Pinch-zoom is re-enabled
+        // here, with the on-screen +/- controls hidden so it doesn't look
+        // like a browser — the gesture is there if something is cut off,
+        // but nothing changes for pages that already fit.
+        ws.setSupportZoom(true);
+        ws.setBuiltInZoomControls(true);
+        ws.setDisplayZoomControls(false);
+        // Default OVER_SCROLL_ALWAYS fights with SwipeRefreshLayout's own
+        // pull-down gesture right at the top of the page (both try to
+        // handle the same drag), which is what made panning feel stuck
+        // there. IF_CONTENT_SCROLLS only engages the WebView's own overscroll
+        // once its content is actually larger than the viewport, leaving the
+        // top-of-page drag to SwipeRefreshLayout.
+        webView.setOverScrollMode(WebView.OVER_SCROLL_IF_CONTENT_SCROLLS);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -90,34 +156,30 @@ public class MainActivity extends AppCompatActivity {
         swipe.setOnRefreshListener(() -> webView.reload());
 
         String saved = getServerUrl();
+        updateNavHeader(saved);
         if (TextUtils.isEmpty(saved)) {
             promptForServerUrl(true);
         } else {
             webView.loadUrl(saved);
         }
-    }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.main_menu, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-        if (id == R.id.action_reload) {
-            webView.reload();
-            return true;
-        } else if (id == R.id.action_change_server) {
-            promptForServerUrl(false);
-            return true;
+        // Restore the drawer to however the admin last left it, rather than
+        // always starting closed — posted so it runs after this layout pass
+        // has actually measured the drawer (opening it before that can be a
+        // no-op on some devices).
+        if (prefs.getBoolean(KEY_DRAWER_OPEN, false)) {
+            drawerLayout.post(() -> drawerLayout.openDrawer(navView));
         }
-        return super.onOptionsItemSelected(item);
     }
 
     @Override
     public void onBackPressed() {
+        // Closing an open drawer is the more expected "back" action than
+        // navigating the page underneath it or closing the app outright.
+        if (drawerLayout.isDrawerOpen(androidx.core.view.GravityCompat.START)) {
+            drawerLayout.closeDrawers();
+            return;
+        }
         // Back inside the dashboard's own navigation (tabs are client-side
         // routing, not real page loads, so WebView history is mostly about
         // the remote-control panel and similar in-page state) before
@@ -131,6 +193,12 @@ public class MainActivity extends AppCompatActivity {
 
     private String getServerUrl() {
         return prefs.getString(KEY_SERVER_URL, null);
+    }
+
+    private void updateNavHeader(String url) {
+        if (navServer != null) {
+            navServer.setText(TextUtils.isEmpty(url) ? getString(R.string.server_url_hint) : url);
+        }
     }
 
     /** cancelable=false on first launch (there's nothing useful to show yet
@@ -163,6 +231,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             prefs.edit().putString(KEY_SERVER_URL, url).apply();
+            updateNavHeader(url);
             webView.loadUrl(url);
             dialog.dismiss();
         }));
