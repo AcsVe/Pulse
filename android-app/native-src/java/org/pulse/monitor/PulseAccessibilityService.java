@@ -89,6 +89,31 @@ public class PulseAccessibilityService extends AccessibilityService {
         return dispatchGesture(new GestureDescription.Builder().addStroke(stroke).build(), null, null);
     }
 
+    /** Two concurrent strokes dispatched together — same system mechanism as
+     *  tap/swipe above, just with more than one finger moving at once. Each
+     *  entry in `strokes` is [startX, startY, endX, endY]; sharing the same
+     *  start time (0) and duration across all of them is what makes the
+     *  system treat them as one multi-finger gesture (pinch-zoom, a
+     *  two-finger pan/scroll, ...) instead of two unrelated taps — whichever
+     *  one the receiving app actually does with it is up to that app, this
+     *  just replays the two finger paths the admin drew on the dashboard. */
+    public boolean multiTouch(int[][] strokes, int durationMs) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false;
+        long d = Math.max(60, Math.min(durationMs, 2000));
+        GestureDescription.Builder b = new GestureDescription.Builder();
+        int added = 0;
+        for (int[] s : strokes) {
+            if (s == null || s.length < 4) continue;
+            Path path = new Path();
+            path.moveTo(s[0], s[1]);
+            path.lineTo(s[2], s[3]);
+            b.addStroke(new GestureDescription.StrokeDescription(path, 0, d));
+            added++;
+        }
+        if (added == 0) return false;
+        return dispatchGesture(b.build(), null, null);
+    }
+
     public boolean globalAction(String name) {
         int action;
         switch (name) {

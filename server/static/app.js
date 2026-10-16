@@ -1162,17 +1162,70 @@ function openRemotePanel(id, name) {
   };
   img.onmousedown = e => { e.preventDefault(); startDrag(e.clientX, e.clientY); };
   img.onmouseup = e => endDrag(e.clientX, e.clientY);
+  // Two-finger gesture (pinch zoom, or a two-finger pan/scroll) relayed to
+  // the phone as two concurrent moving touches — what the phone actually
+  // does with it (zoom in/out, scroll, select...) depends on whatever app
+  // is open there, same as it would with a real finger; this just replays
+  // the two finger paths as drawn here. Only the gesture's start and end
+  // points are sent (one discrete command, like swipe), not a continuous
+  // live stream — consistent with this panel's whole polling design, but
+  // it means mid-gesture motion on the phone only appears once released,
+  // not fluidly as it's drawn.
+  const startPinch = (t0, t1) => {
+    const r = img.getBoundingClientRect();
+    RC.pinch = {
+      w: r.width, h: r.height, t: Date.now(),
+      id0: t0.identifier, id1: t1.identifier,
+      s0: { x: t0.clientX - r.left, y: t0.clientY - r.top },
+      s1: { x: t1.clientX - r.left, y: t1.clientY - r.top },
+      e0: null, e1: null,
+    };
+    RC.drag = null; // a two-finger gesture always wins over a stray single-finger one
+  };
+  const trackPinch = touches => {
+    const p = RC.pinch; if (!p) return;
+    const r = img.getBoundingClientRect();
+    for (const t of touches) {
+      if (t.identifier === p.id0) p.e0 = { x: t.clientX - r.left, y: t.clientY - r.top };
+      if (t.identifier === p.id1) p.e1 = { x: t.clientX - r.left, y: t.clientY - r.top };
+    }
+  };
+  const finishPinch = () => {
+    const p = RC.pinch; if (!p) return;
+    RC.pinch = null;
+    const e0 = p.e0 || p.s0, e1 = p.e1 || p.s1;
+    const dur = Math.max(80, Math.min(1500, Date.now() - p.t));
+    tapFx((p.s0.x + p.s1.x) / 2, (p.s0.y + p.s1.y) / 2);
+    const dx = px => Math.round((px / p.w) * (RC.w || img.naturalWidth || 1080));
+    const dy = px => Math.round((px / p.h) * (RC.h || img.naturalHeight || 1920));
+    remoteCmd({ action: 'pinch', duration: dur, touches: [
+      [dx(p.s0.x), dy(p.s0.y), dx(e0.x), dy(e0.y)],
+      [dx(p.s1.x), dy(p.s1.y), dx(e1.x), dy(e1.y)],
+    ] });
+  };
   // Touch support: mouse-only handlers meant tap/swipe never worked when
   // the admin used their own touchscreen (phone/tablet browser, or the
   // Admin app's WebView) instead of a mouse — a real gap for an app that's
   // meant to be used from a phone.
   img.ontouchstart = e => {
     e.preventDefault();
-    const tt = e.changedTouches[0];
-    if (tt) startDrag(tt.clientX, tt.clientY);
+    if (e.touches.length >= 2) {
+      startPinch(e.touches[0], e.touches[1]);
+    } else if (e.touches.length === 1 && !RC.pinch) {
+      const tt = e.touches[0];
+      startDrag(tt.clientX, tt.clientY);
+    }
+  };
+  img.ontouchmove = e => {
+    if (RC.pinch) { e.preventDefault(); trackPinch(e.touches); }
+    else if (RC.drag) { e.preventDefault(); } // block page scroll while swiping
   };
   img.ontouchend = e => {
     e.preventDefault();
+    if (RC.pinch) {
+      if (e.touches.length < 2) finishPinch();
+      return;
+    }
     const tt = e.changedTouches[0];
     if (tt) endDrag(tt.clientX, tt.clientY);
   };

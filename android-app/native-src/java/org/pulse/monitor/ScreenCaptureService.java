@@ -269,6 +269,28 @@ public class ScreenCaptureService extends Service {
                         scaleX(p.optInt("x2")), scaleY(p.optInt("y2")), p.optInt("duration", 300)); break;
                 case "text": svc.setFocusedText(p.optString("text", "")); break;
                 case "back": case "home": case "recents": svc.globalAction(action); break;
+                // Two-finger gesture (pinch zoom or a two-finger pan/scroll) —
+                // one generic relay covers both, since what the phone does
+                // with two concurrent moving touch points depends on the app
+                // underneath, not on us labeling the gesture. "touches" is a
+                // JSON array of [startX,startY,endX,endY] per finger, in the
+                // same downscaled capture space as tap/swipe above.
+                case "pinch": {
+                    JSONArray touches = p.optJSONArray("touches");
+                    if (touches == null) break;
+                    int n = Math.min(touches.length(), 2); // dispatchGesture caps concurrent strokes low enough that only 2 is reliable
+                    int[][] strokes = new int[n][4];
+                    for (int ti = 0; ti < n; ti++) {
+                        JSONArray t = touches.optJSONArray(ti);
+                        if (t == null || t.length() < 4) continue;
+                        strokes[ti][0] = scaleX(t.optInt(0));
+                        strokes[ti][1] = scaleY(t.optInt(1));
+                        strokes[ti][2] = scaleX(t.optInt(2));
+                        strokes[ti][3] = scaleY(t.optInt(3));
+                    }
+                    svc.multiTouch(strokes, p.optInt("duration", 200));
+                    break;
+                }
                 default: break;
             }
         }

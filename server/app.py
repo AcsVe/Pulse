@@ -834,11 +834,23 @@ def create_app(test_config=None):
             return jsonify({'error': 'not_active'}), 400
         data = request.get_json(silent=True) or {}
         action = (data.get('action') or '').strip()
-        if action not in ('tap', 'swipe', 'text', 'back', 'home', 'recents', 'launch', 'close'):
+        if action not in ('tap', 'swipe', 'pinch', 'text', 'back', 'home', 'recents', 'launch', 'close'):
             return jsonify({'error': 'bad_action'}), 400
         if action in ('launch', 'close') and not (data.get('pkg') or '').strip():
             return jsonify({'error': 'pkg_required'}), 400
         params = {k: data[k] for k in ('x', 'y', 'x2', 'y2', 'duration', 'text', 'pkg') if k in data}
+        # 'pinch' (two-finger zoom/pan) carries its two finger paths as a
+        # nested list rather than flat x/y keys — validated just enough to
+        # keep garbage out of the queue the device polls (a handful of
+        # numeric 4-tuples, not arbitrary JSON).
+        if action == 'pinch':
+            touches = data.get('touches')
+            if (isinstance(touches, list) and 1 <= len(touches) <= 2
+                    and all(isinstance(t, list) and len(t) == 4 and all(isinstance(v, (int, float)) for v in t)
+                            for t in touches)):
+                params['touches'] = touches
+            else:
+                return jsonify({'error': 'bad_touches'}), 400
         # Keep the queue from piling up if the dashboard sends faster than the
         # device can poll — commands are discrete UI actions, so only the
         # newest handful matter.
