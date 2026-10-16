@@ -1200,6 +1200,25 @@ async function load() {
   } catch (e) { if (String(e.message) !== '401') console.error(e); }
 }
 
+// Keeps the Devices tab's status/last-seen/connection columns current on
+// their own fast cadence — the general dashboard auto-refresh (20s, and
+// paused entirely during a remote-control session) was far too coarse for
+// "catch the information momently" and made Offline/online look stuck for
+// minutes at a time. Runs independently of RC.id: the remote panel is a
+// separate #remoteModal overlay, not a replacement of #main, so refreshing
+// the devices table underneath it is safe and doesn't fight it for
+// anything. Skips a tick rather than re-rendering out from under someone
+// who is mid-edit (typing a search query or a new device name, renaming a
+// device) so the 5s cadence doesn't yank their cursor away.
+function startDevicesLive() {
+  setInterval(() => {
+    if (S.tab !== 'devices' || document.hidden) return;
+    const ae = document.activeElement;
+    const main = $('#main');
+    if (ae && main && main.contains(ae) && ae.tagName !== 'BUTTON') return;
+    renderDevices();
+  }, 5000);
+}
 async function init() {
   setLang(lang);
   try {
@@ -1217,6 +1236,7 @@ async function init() {
   fd.onchange = td.onchange = onRange;
   paintStatic();
   initChartTooltip();
+  startDevicesLive();
   if (K.kiosk) {
     S.tab = 'overview'; S.period = 'd7';
     const tick = () => { const c = $('#clock'); if (c) { const d = new Date(); c.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`; } };
@@ -1227,9 +1247,15 @@ async function init() {
   } else {
     // Auto-refresh the dashboard itself so it reflects new data as it
     // arrives, instead of only on a manual click of the refresh button.
-    // Paused while the tab isn't visible or the remote-control view is
-    // open (a refresh there would interrupt the live screen feed).
-    setInterval(() => { if (!document.hidden && !RC.id) load(); }, 20000);
+    // Was 20s — too slow once the phone itself can push every few seconds
+    // (see CollectorService's syncTask, now tied to the same configurable
+    // interval instead of a fixed 2 minutes) for the dashboard to still
+    // feel "momently". Paused while the tab isn't visible or the
+    // remote-control view is open (a refresh there would interrupt the
+    // live screen feed) — the Devices tab gets its own faster, unpaused
+    // refresh separately (startDevicesLive above) since it isn't fighting
+    // anything for #main.
+    setInterval(() => { if (!document.hidden && !RC.id) load(); }, 8000);
   }
   // Re-measure on resize/orientation change (debounced) — window width
   // changes how many header buttons fit per row, and crossing the 760px
