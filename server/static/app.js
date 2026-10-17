@@ -1189,8 +1189,24 @@ function openRemotePanel(id, name) {
       remoteCmd({ action: 'tap', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y), duration: Date.now() - RC.drag.t });
     } else {
       tapFx(x2, y2);
+      // A home-screen page swipe is a FLING, not just any drag: launchers
+      // (MIUI's especially) only change pages when the gesture's velocity
+      // crosses a threshold, and fall back to snapping back to the current
+      // page otherwise. Forwarding the admin's *actual* elapsed drag time
+      // (as tap's duration does, deliberately, for long-press) was wrong
+      // here specifically — a deliberate, careful drag on the dashboard
+      // (which is exactly what trying to "do it slower" produces) yields a
+      // LOW-velocity synthetic swipe on the phone, under that fling
+      // threshold, which is consistent with left/right paging failing
+      // almost every time and a slower/longer drag not helping. Cap the
+      // dispatched duration well below what a real elapsed drag usually
+      // is, so the synthetic gesture is always a quick flick regardless of
+      // how carefully the admin dragged — same distance, much less time,
+      // much higher velocity.
+      const elapsed = Date.now() - RC.drag.t;
+      const dur = elapsed < 500 ? Math.max(80, elapsed) : 220;
       remoteCmd({ action: 'swipe', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y), x2: toDevX(x2), y2: toDevY(y2),
-                  duration: Math.max(80, Math.min(1200, Date.now() - RC.drag.t)) });
+                  duration: dur });
     }
     RC.drag = null;
   };
