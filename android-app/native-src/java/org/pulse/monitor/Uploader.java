@@ -141,6 +141,16 @@ public class Uploader {
             String connType = NetMonitor.currentTransport(ctx);
             body.put("connType", connType.isEmpty() ? "none" : connType);
             body.put("accessibilityEnabled", PulsePlugin.isAccessibilityEnabled(ctx));
+            // Whether this device still holds a live MediaProjection (screen
+            // capture) consent — cleared by BootReceiver on every reboot,
+            // since that consent is an Android platform-level grant that
+            // cannot survive one and cannot be silently re-requested (it
+            // always needs the on-device "Start now" dialog tapped through
+            // again). Reporting it lets the dashboard show, per device,
+            // which ones need that one tap redone after their last reboot,
+            // instead of the admin only finding out when remote control is
+            // already expected to work and silently isn't.
+            body.put("remoteCapable", db.getBool("remote_capable", false));
         } catch (Exception e) {
             return false;
         }

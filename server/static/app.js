@@ -61,6 +61,8 @@ const T = {
     connectionType:'نوع الاتصال', connNone:'بلا اتصال', connUnknown:'غير معروف',
     confirmNewCode:'سيتم إنشاء رمز ربط جديد، وسيحتاج هذا الهاتف لإعادة الربط به. استمرار؟',
     accessibilityWarn:'⚠ خدمة إمكانية الوصول غير مفعّلة على هذا الهاتف — النقر والسحب لن يعملا. فعّلها من إعدادات الهاتف داخل تطبيق Pulse.',
+    remoteCapableWarn:'⚠ صلاحية مشاركة الشاشة أُلغيت تلقائياً بعد آخر إعادة تشغيل لهذا الهاتف (قيد من أندرويد نفسه، ليست مشكلة في التطبيق) — افتح تطبيق Pulse على هذا الهاتف واضغط "تفعيل" مرة واحدة ليعود البث والتحكم للعمل.',
+    remoteCapableBadge:'يحتاج إعادة تفعيل',
     mailTransport:'إعدادات الإرسال', provider:'طريقة الإرسال', providerSmtp:'SMTP', providerGraph:'Microsoft Graph',
     graphTenantId:'معرّف المستأجر (Tenant ID)', graphClientId:'معرّف التطبيق (Client ID)',
     graphClientSecret:'سر التطبيق (Client Secret)', graphClientSecretHint:'اتركه فارغاً للإبقاء على القيمة الحالية',
@@ -143,6 +145,8 @@ const T = {
     connectionType:'Connection type', connNone:'No connection', connUnknown:'Unknown',
     confirmNewCode:'This creates a new enrollment code, and the phone will need to re-enroll with it. Continue?',
     accessibilityWarn:'⚠ Accessibility service is not enabled on this phone — taps and swipes will not work. Enable it from the phone\'s settings inside the Pulse app.',
+    remoteCapableWarn:'⚠ Screen-sharing permission was automatically revoked after this phone\'s last reboot (an Android platform rule, not an app bug) — open the Pulse app on this phone and tap "Start" once to bring the live screen and remote control back.',
+    remoteCapableBadge:'Needs re-enabling',
     remote:'Remote control', remoteStart:'Start remote control', remoteStop:'Stop', remoteWaiting:'Waiting for the first frame from the phone…',
     remoteLost:"Lost contact with the phone — check that it's online and remote control is still enabled on it",
     remoteStale:"Picture isn't updating right now — retrying",
@@ -781,7 +785,15 @@ async function renderDevices() {
     { k: 'name', label: t('name'), w: 180, html: x => canWrite()
         ? `<span class="lbl">${esc(x.name)}</span><button class="renamebtn" data-id="${x.id}" title="${esc(t('rename'))}">✎</button>`
         : `<span class="lbl">${esc(x.name)}</span>`, text: x => x.name },
-    { k: 'status', label: t('status'), w: 150, html: x => `<span class="dot" style="background:${x.status === 'online' ? 'var(--good)' : x.status === 'pending' ? 'var(--warn)' : 'var(--grey)'}"></span>${esc(t(x.status))}`, text: x => t(x.status) },
+    { k: 'status', label: t('status'), w: 150, html: x => `<span class="dot" style="background:${x.status === 'online' ? 'var(--good)' : x.status === 'pending' ? 'var(--warn)' : 'var(--grey)'}"></span>${esc(t(x.status))}` +
+        // remoteCapable goes false the moment the device reboots (Android
+        // revokes the screen-capture consent on every reboot — see
+        // BootReceiver) and only a tap on the phone itself brings it back.
+        // Surfacing it here means the admin sees which devices need that
+        // one tap without having to open remote control on each one first
+        // to discover it's silently not working.
+        (x.enrolled && x.remoteCapable === false ? ` <span class="cat-badge" title="${esc(t('remoteCapableWarn'))}" style="background:#fde1c8;color:#9a5a12">${esc(t('remoteCapableBadge'))}</span>` : ''),
+      text: x => t(x.status) },
     { k: 'lastSeen', label: t('lastSeen'), fmt: fmtTs, w: 150 },
     { k: 'ipAddress', label: t('ip'), w: 130, fmt: v => v || '—' },
     { k: 'connectionType', label: t('connectionType'), w: 150, html: x => {
@@ -1090,6 +1102,7 @@ function openRemotePanel(id, name) {
         </div>
       </div>
       ${dev && dev.accessibilityEnabled === false ? `<div class="remote-warn">${esc(t('accessibilityWarn'))}</div>` : ''}
+      ${dev && dev.remoteCapable === false ? `<div class="remote-warn">${esc(t('remoteCapableWarn'))}</div>` : ''}
       <div class="remote-screen-wrap">
         <div class="remote-wait" id="rcWait">${esc(t('remoteWaiting'))}</div>
         <img id="rcImg" hidden>

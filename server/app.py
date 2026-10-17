@@ -79,6 +79,7 @@ def create_app(test_config=None):
             'wifi_band': 'VARCHAR(10)',
             'apps_json': 'TEXT',
             'apps_at': 'BIGINT',
+            'remote_capable': 'BOOLEAN',
         })
         if not db.session.get(EmailSettings, 1):
             db.session.add(EmailSettings(id=1))
@@ -429,6 +430,8 @@ def create_app(test_config=None):
             dev.connection_type = str(data['connType'])[:20]
         if data.get('accessibilityEnabled') is not None:
             dev.accessibility_enabled = bool(data['accessibilityEnabled'])
+        if data.get('remoteCapable') is not None:
+            dev.remote_capable = bool(data['remoteCapable'])
         for k in ('model', 'os', 'app'):
             if data.get(k):
                 setattr(dev, {'model': 'model', 'os': 'os_version', 'app': 'app_version'}[k], str(data[k])[:120])

@@ -45,6 +45,12 @@ class Device(db.Model):
     connection_type     = db.Column(db.String(20))             # wifi | cellular | ethernet | none
     wifi_band    = db.Column(db.String(10))                    # 2.4GHz | 5GHz | 6GHz — only meaningful while on wifi
     accessibility_enabled = db.Column(db.Boolean)               # None = unknown (older app build / never synced)
+    # Whether the device currently holds a live MediaProjection (screen
+    # capture) consent. Android revokes this grant on every reboot — a
+    # platform rule, not a bug — so BootReceiver clears it on boot and it
+    # only goes back to true once someone physically taps through the
+    # on-device "Start now" dialog again. None = unknown (older app build).
+    remote_capable = db.Column(db.Boolean)
     created_at   = db.Column(db.BigInteger, default=now_ms)
     # remote screen view/control
     remote_active   = db.Column(db.Boolean, default=False)
@@ -71,6 +77,7 @@ class Device(db.Model):
             'ipAddress': self.ip_address or '', 'wifiMbps': self.wifi_mbps,
             'connectionType': self.connection_type or '', 'wifiBand': self.wifi_band or '',
             'accessibilityEnabled': self.accessibility_enabled,
+            'remoteCapable': self.remote_capable,
             'remoteActive': bool(self.remote_active),
             'remoteScreenW': self.remote_screen_w, 'remoteScreenH': self.remote_screen_h,
             'remoteFrameAt': self.remote_frame_at,
