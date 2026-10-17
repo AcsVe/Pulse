@@ -19,6 +19,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.util.DisplayMetrics;
 import android.view.WindowManager;
 
@@ -70,6 +71,19 @@ public class ScreenCaptureService extends Service {
     // where the dashboard image was actually tapped (see tap()/swipe() below).
     private int rawWidth, rawHeight;
     private volatile boolean active = false;
+    // Same root cause, same fix, as CollectorService's wake lock (see its
+    // long comment): a foreground service — even a MEDIA_PROJECTION one —
+    // is exempt from background execution/network limits, but that does
+    // nothing to stop the CPU itself from sleeping in Doze, and a sleeping
+    // CPU just doesn't run a Handler's postDelayed() callbacks. Without a
+    // wake lock here, frameTask/cmdTask (capture+upload every 250ms, poll
+    // for commands every 150ms) could silently stop firing for seconds at a
+    // time the moment the device judged itself idle — which is exactly what
+    // the admin's "Picture isn't updating — retrying" banner and "swipe
+    // doesn't seem to do anything" reports looked like: the frame really
+    // had stopped updating, and a swipe command really was sitting queued
+    // on the server, unexecuted, until the CPU next woke up on its own.
+    private PowerManager.WakeLock wakeLock;
 
     public static void start(Context ctx, int resultCode, Intent data) {
         Intent i = new Intent(ctx, ScreenCaptureService.class);
@@ -92,9 +106,22 @@ public class ScreenCaptureService extends Service {
         } else {
             startForeground(NOTIF_ID, buildNotification());
         }
+        acquireWakeLock();
         thread = new HandlerThread("pulse-screencap");
         thread.start();
         handler = new Handler(thread.getLooper());
+    }
+
+    private void acquireWakeLock() {
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (pm == null) return;
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "pulse:screencap");
+        wakeLock.setReferenceCounted(false);
+        wakeLock.acquire();
+    }
+
+    private void releaseWakeLock() {
+        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
     }
 
     @Override
@@ -349,6 +376,7 @@ public class ScreenCaptureService extends Service {
     public void onDestroy() {
         super.onDestroy();
         active = false;
+        releaseWakeLock();
         if (handler != null) {
             handler.removeCallbacks(watchTask);
             handler.removeCallbacks(frameTask);
