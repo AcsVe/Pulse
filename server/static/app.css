@@ -238,7 +238,19 @@ body.kiosk svg text{fill:#bcd0de}
    frame to show) flashed the browser's broken-image icon next to the
    "waiting for first frame" text every ~300ms. Scoping the rule to the
    non-hidden state only lets the hidden attribute actually hide it again. */
-.remote-screen-wrap img:not([hidden]){max-width:100%;max-height:78vh;display:block;cursor:pointer;user-select:none;-webkit-user-drag:none;transition:transform .15s;transform-origin:center top}
+/* touch-action:none hands ALL touch gestures on this image to our own
+   ontouchstart/move/end handlers (app.js) instead of letting the browser's
+   own gesture recognizer claim them first. Without it, the browser's
+   default touch-action is "auto" — the UA is free to treat a touch
+   sequence as its own native gesture before JS gets a reliable say, and
+   horizontal drags in particular are commonly claimed by the browser/
+   WebView chrome itself (edge-swipe "go back" navigation, horizontal pan)
+   in a way page-level e.preventDefault() in touchmove can't override once
+   that's already happened — which is exactly why up/down swipes relayed
+   to the phone correctly while left/right swipes silently did nothing:
+   vertical drags weren't competing with any such built-in gesture here,
+   horizontal ones were. */
+.remote-screen-wrap img:not([hidden]){max-width:100%;max-height:78vh;display:block;cursor:pointer;user-select:none;-webkit-user-drag:none;transition:transform .15s;transform-origin:center top;touch-action:none}
 .remote-warn{background:#4a2f12;color:#ffd79a;border:1px solid #7a5a22;border-radius:8px;padding:8px 12px;font-size:.82rem;margin-bottom:10px}
 .remote-wait{color:#9db6c9;padding:40px 10px;text-align:center;font-size:.88rem}
 /* Sits over the last successfully-loaded frame when the phone has stopped
