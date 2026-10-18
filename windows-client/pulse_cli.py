@@ -37,8 +37,12 @@ HERE = os.path.dirname(os.path.abspath(sys.executable)) if getattr(sys, 'frozen'
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pulse_agent import db, uploader
-SERVICE_EXE = os.path.join(HERE, 'PulseService.exe')
-HELPER_EXE = os.path.join(HERE, 'PulseHelper.exe')
+# PulseService/PulseHelper are built --onedir (a folder, not a single .exe) —
+# see service_main.py's module docstring for why onefile mode is wrong for
+# a service specifically. Pulse-Setup.exe itself stays --onefile; it's a
+# one-shot CLI tool with no startup-time budget to blow.
+SERVICE_EXE = os.path.join(HERE, 'PulseService', 'PulseService.exe')
+HELPER_EXE = os.path.join(HERE, 'PulseHelper', 'PulseHelper.exe')
 USERS_SID = 'S-1-5-32-545'
 STARTUP_DIR = os.path.join(os.environ.get('ProgramData', r'C:\ProgramData'),
                             r'Microsoft\Windows\Start Menu\Programs\StartUp')
@@ -84,7 +88,7 @@ def _install_startup_shortcut():
     shell = win32com.client.Dispatch('WScript.Shell')
     sc = shell.CreateShortcut(SHORTCUT_PATH)
     sc.TargetPath = HELPER_EXE
-    sc.WorkingDirectory = HERE
+    sc.WorkingDirectory = os.path.dirname(HELPER_EXE)  # so it finds its own onedir-bundled DLLs
     sc.Description = 'Pulse device-monitoring helper (runs per logged-in user)'
     sc.save()
 
@@ -94,8 +98,9 @@ def cmd_install(_args):
     if not db.get_str('device_token'):
         print('Not enrolled yet — run "Pulse-Setup.exe enroll <serverUrl> <code>" first.')
         sys.exit(1)
-    if not os.path.exists(SERVICE_EXE):
-        print(f'{SERVICE_EXE} not found — keep Pulse-Setup.exe next to PulseService.exe and PulseHelper.exe.')
+    if not os.path.exists(SERVICE_EXE) or not os.path.exists(HELPER_EXE):
+        print(f'Expected {SERVICE_EXE} and {HELPER_EXE} — keep the PulseService/ and PulseHelper/ '
+              f'folders next to Pulse-Setup.exe, exactly as the zip extracted them.')
         sys.exit(1)
 
     print('Granting local Users write access to the shared data folder...')

@@ -51,17 +51,26 @@ jobs:
           $dir = python -c "import win32api, os; print(os.path.join(os.path.dirname(os.path.dirname(win32api.__file__)), 'pywin32_system32'))"
           echo "dir=$dir" >> $env:GITHUB_OUTPUT
 
+      # Pulse-Setup is a one-shot CLI tool with no startup-time budget to
+      # respect, so --onefile (slower to launch, but a single small file)
+      # is the right trade here.
       - name: Build Pulse-Setup.exe
         working-directory: windows-client
         run: pyinstaller --onefile --name Pulse-Setup --hidden-import win32timezone pulse_cli.py
 
-      - name: Build PulseService.exe
+      # PulseService and PulseHelper are built --onedir (the PyInstaller
+      # default, a folder of files rather than one compressed exe) —
+      # --onefile re-extracts its whole bundle to a temp folder on every
+      # single launch, which is exactly what makes Windows' Service Control
+      # Manager time out starting a --onefile service (see service_main.py's
+      # docstring). --onedir pays that cost once, at build time, instead.
+      - name: Build PulseService
         working-directory: windows-client
-        run: pyinstaller --onefile --name PulseService --hidden-import win32timezone --hidden-import win32serviceutil service_main.py
+        run: pyinstaller --name PulseService --hidden-import win32timezone --hidden-import win32serviceutil service_main.py
 
-      - name: Build PulseHelper.exe
+      - name: Build PulseHelper
         working-directory: windows-client
-        run: pyinstaller --onefile --windowed --name PulseHelper helper.py
+        run: pyinstaller --windowed --name PulseHelper helper.py
 
       - name: Collect into one folder
         working-directory: windows-client
@@ -69,11 +78,14 @@ jobs:
         run: |
           mkdir out
           copy dist\Pulse-Setup.exe out\
-          copy dist\PulseService.exe out\
-          copy dist\PulseHelper.exe out\
+          Copy-Item dist\PulseService out\PulseService -Recurse
+          Copy-Item dist\PulseHelper out\PulseHelper -Recurse
           if (Test-Path README.md) { copy README.md out\ }
           $dlls = "${{ steps.pywin32dlls.outputs.dir }}"
-          if (Test-Path $dlls) { copy "$dlls\*.dll" out\ }
+          if (Test-Path $dlls) {
+            copy "$dlls\*.dll" out\PulseService\
+            copy "$dlls\*.dll" out\PulseHelper\
+          }
 
       - name: Zip
         working-directory: windows-client
@@ -93,5 +105,5 @@ jobs:
           gh release delete windows-client-latest --cleanup-tag --yes || true
           gh release create windows-client-latest windows-client/Pulse-Windows-Client.zip \
             --title "Pulse Windows client" \
-            --notes "Standalone Windows client (Pulse-Setup.exe, PulseService.exe, PulseHelper.exe). Built from ${GITHUB_SHA::7}. Unzip into its own folder, then from an elevated prompt: Pulse-Setup.exe enroll <serverUrl> <code>, then Pulse-Setup.exe install." \
+            --notes "Standalone Windows client — Pulse-Setup.exe plus the PulseService/ and PulseHelper/ folders. Built from ${GITHUB_SHA::7}. Unzip, keeping all three together, then from an elevated prompt: Pulse-Setup.exe enroll <serverUrl> <code>, then Pulse-Setup.exe install." \
             --latest

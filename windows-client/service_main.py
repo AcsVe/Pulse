@@ -16,8 +16,19 @@ Install/manage like any pywin32 service, e.g. from an elevated prompt:
     PulseService.exe start
     PulseService.exe stop
     PulseService.exe remove
-(install.py wraps this plus the PulseHelper logon task and the one-time
-enrollment prompt into a single step.)
+(pulse_cli.py's `install` command wraps this plus the PulseHelper logon
+shortcut and the one-time enrollment step into one call.)
+
+Built --onedir (a folder, not PyInstaller's --onefile) rather than a single
+.exe, specifically because of this role: Windows' Service Control Manager
+only waits ~30s for a newly-started service to report itself running, and
+--onefile re-extracts its entire bundle (interpreter, pywin32, psutil,
+Pillow) to a fresh temp folder on EVERY launch before any of this code even
+starts — on a slower disk, or with antivirus scanning that extraction, that
+alone can blow past 30s and the service start fails with "did not respond
+in a timely fashion" despite the service being perfectly healthy once
+running. --onedir pays that unpacking cost once, at build time, not on
+every service start.
 """
 import sys
 import time

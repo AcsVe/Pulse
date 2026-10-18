@@ -19,16 +19,28 @@ surviving a reboot.
 
 So the work is split by which side of that wall it needs to be on:
 
-- **PulseService.exe** — a real Windows Service (Session 0). Syncs to the
-  server, reads browser history files (across every local user profile),
-  measures device-wide network totals, and drains the local upload queue.
-- **PulseHelper.exe** — runs once per logged-in user, in *that* user's own
-  session (started via a Startup-folder shortcut, not a service). Tracks
-  the foreground app, and — only while the dashboard has remote control
-  turned on for this device — captures the screen and executes incoming
-  tap/swipe/text/etc. commands.
-- **Pulse-Setup.exe** — the one-time setup tool that ties the two together
-  (see below). Not something that keeps running.
+- **PulseService/** (a folder, containing `PulseService.exe`) — a real
+  Windows Service (Session 0). Syncs to the server, reads browser history
+  files (across every local user profile), measures device-wide network
+  totals, and drains the local upload queue.
+- **PulseHelper/** (same: a folder, containing `PulseHelper.exe`) — runs
+  once per logged-in user, in *that* user's own session (started via a
+  Startup-folder shortcut, not a service). Tracks the foreground app, and
+  — only while the dashboard has remote control turned on for this device
+  — captures the screen and executes incoming tap/swipe/text/etc. commands.
+- **Pulse-Setup.exe** — the one-time setup tool that ties the other two
+  together (see below). Not something that keeps running, so it's a single
+  file rather than a folder.
+
+PulseService and PulseHelper are each a *folder* rather than a single
+`.exe` — deliberately: Windows' Service Control Manager only waits ~30
+seconds for a service to report itself started, and a single-file
+("onefile") build has to re-extract its entire bundle to a temp folder on
+every launch, which can itself take longer than that wait on a slower disk
+or under antivirus scanning. A folder build pays that unpacking cost once,
+at build time, not on every start. Keep each folder's contents together
+exactly as the zip extracted them — moving just the `.exe` out on its own
+will not work.
 
 Both PulseService and PulseHelper read/write the same local sqlite file
 under `C:\ProgramData\Pulse\pulse.db` — PulseHelper queues rows into it
@@ -47,9 +59,9 @@ Pulse-Setup.exe install
 `enroll` takes the same server URL + one-time linking code the dashboard
 generates for any device. `install` grants the local Users group write
 access to `C:\ProgramData\Pulse` (icacls), installs and starts
-PulseService, and drops a shortcut to PulseHelper.exe into the all-users
-Startup folder. Sign out and back in (or reboot) once afterward so
-PulseHelper picks up the currently logged-in session.
+PulseService, and drops a shortcut to `PulseHelper\PulseHelper.exe` into
+the all-users Startup folder. Sign out and back in (or reboot) once
+afterward so PulseHelper picks up the currently logged-in session.
 
 To remove everything: `Pulse-Setup.exe uninstall` (also elevated). Local
 data under `C:\ProgramData\Pulse` is left in place; delete that folder by
