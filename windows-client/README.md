@@ -75,6 +75,12 @@ hand if you want it gone too.
   per-machine fixes (missing DLL, a hidden import); report back whatever
   error comes up on first install/start.
 - **Per-app network usage** isn't available — only a device-wide total.
+  CPU%, RAM, connection type (Wi-Fi/Ethernet) and link/current network
+  speed ARE reported (see `pulse_agent/sysstats.py` and
+  `netinfo.primary_interface()`) and show up as their own columns on the
+  dashboard's Devices tab, same as the Android app's equivalents.
+- **Per-app CPU/RAM usage** isn't collected yet either — only the
+  device-wide totals above.
 - **Browser history** currently covers Chrome and Edge (both Chromium,
   same `History` file format). Firefox uses a different format and isn't
   read yet.

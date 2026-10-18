@@ -60,6 +60,16 @@ class Device(db.Model):
     poll_interval_s = db.Column(db.Integer, default=5)        # device-configurable "realtime" cadence
     apps_json       = db.Column(db.Text)                       # cached [{pkg,label}] for the remote "open app" picker
     apps_at         = db.Column(db.BigInteger)                 # ms epoch the device last reported its app list
+    # Live system snapshot, overwritten on every sync (same pattern as
+    # wifi_mbps/connection_type above) rather than a time series — only the
+    # Windows client sends these today (see windows-client/pulse_agent/
+    # sysstats.py); Android has no low-privilege way to read system-wide
+    # CPU, and already has its own memory path via DeviceSample instead.
+    cpu_pct         = db.Column(db.Float)
+    mem_used_mb     = db.Column(db.Integer)
+    mem_total_mb    = db.Column(db.Integer)
+    net_down_kbps   = db.Column(db.Integer)
+    net_up_kbps     = db.Column(db.Integer)
 
     @staticmethod
     def new_enroll_code():
@@ -82,6 +92,8 @@ class Device(db.Model):
             'remoteScreenW': self.remote_screen_w, 'remoteScreenH': self.remote_screen_h,
             'remoteFrameAt': self.remote_frame_at,
             'pollIntervalS': self.poll_interval_s or 5,
+            'cpuPct': self.cpu_pct, 'memUsedMb': self.mem_used_mb, 'memTotalMb': self.mem_total_mb,
+            'netDownKbps': self.net_down_kbps, 'netUpKbps': self.net_up_kbps,
         }
 
 

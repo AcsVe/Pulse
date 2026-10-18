@@ -57,6 +57,7 @@ const T = {
     memUsed:'مستخدَمة', memFree:'متاحة', wifi:'واي فاي', cellular:'بيانات الجوال', unknownTransport:'غير معروف',
     hourly:'كل ساعة', unrestricted:'إرسال كل البيانات المتاحة (بلا تقييد بالأقسام)',
     perDevice:'إرسال تقرير إضافي منفصل لكل جهاز', wifiSpeed:'سرعة واي فاي', pollIntervalS:'فترة التحديث (ثوانٍ)',
+    cpuUsage:'المعالج', ramUsage:'الذاكرة', netSpeed:'سرعة الشبكة',
     pollIntervalHint:'كل كم ثانية يرسل الهاتف بياناته — رقم أصغر = أقرب للفوري لكنه يستهلك بطارية أكثر',
     connectionType:'نوع الاتصال', connNone:'بلا اتصال', connUnknown:'غير معروف',
     confirmNewCode:'سيتم إنشاء رمز ربط جديد، وسيحتاج هذا الهاتف لإعادة الربط به. استمرار؟',
@@ -143,6 +144,7 @@ const T = {
     memUsed:'Used', memFree:'Free', wifi:'Wi-Fi', cellular:'Cellular', unknownTransport:'Unknown',
     hourly:'Hourly', unrestricted:'Send all available data (ignore section picker)',
     perDevice:'Also send a separate report per device', wifiSpeed:'Wi-Fi speed', pollIntervalS:'Update interval (seconds)',
+    cpuUsage:'CPU', ramUsage:'RAM', netSpeed:'Network speed',
     pollIntervalHint:'How often the phone sends its data — lower = closer to real-time but uses more battery',
     connectionType:'Connection type', connNone:'No connection', connUnknown:'Unknown',
     confirmNewCode:'This creates a new enrollment code, and the phone will need to re-enroll with it. Continue?',
@@ -205,6 +207,10 @@ function fmtBytes(n) {
   return v.toFixed(v >= 100 ? 0 : v >= 10 ? 1 : 2) + ' ' + units[u];
 }
 function fmtVal(v, unit) { return unit === 'ms' ? fmtDur(v) : unit === 'pct' ? fmtPct(v) : unit === 'bytes' ? fmtBytes(v) : fmtNum(v); }
+function fmtKbps(v) {
+  if (v == null) return '—';
+  return v >= 1024 ? (v / 1024).toFixed(1) + ' Mbps' : Math.round(v) + ' Kbps';
+}
 const KIND_COLOR = { connected:'var(--k-connected)', no_internet:'var(--k-no_internet)', failed:'var(--k-failed)', disconnected:'var(--k-disconnected)' };
 const kindBadge = k => `<span class="badge" style="background:${KIND_COLOR[k] || '#888'}">${esc(t(k))}</span>`;
 
@@ -809,6 +815,17 @@ async function renderDevices() {
         return esc(lbl);
       }, text: x => x.connectionType },
     { k: 'wifiMbps', label: t('wifiSpeed'), w: 110, num: true, fmt: v => v ? `${v} Mbps` : '—' },
+    // CPU/RAM/live network speed: only the Windows client reports these
+    // today (see windows-client/pulse_agent/sysstats.py) — Android devices
+    // simply show '—' here, same treatment connectionType above already
+    // gives a device that hasn't reported one.
+    { k: 'cpuPct', label: t('cpuUsage'), w: 90, num: true, fmt: v => v != null ? `${Math.round(v)}%` : '—' },
+    { k: 'memUsedMb', label: t('ramUsage'), w: 130, num: true,
+      fmt: (v, x) => v != null && x.memTotalMb ? `${Math.round(v / x.memTotalMb * 100)}% (${v}/${x.memTotalMb} MB)` : '—' },
+    { k: 'netSpeed', label: t('netSpeed'), w: 140, num: true,
+      html: x => (x.netDownKbps == null && x.netUpKbps == null) ? '—'
+        : `↓${fmtKbps(x.netDownKbps)} ↑${fmtKbps(x.netUpKbps)}`,
+      text: x => `${x.netDownKbps || 0}/${x.netUpKbps || 0}` },
     { k: 'pollIntervalS', label: t('pollIntervalS'), w: 130,
       html: x => canWrite()
         ? `<span class="lbl">${x.pollIntervalS || 5}</span><button class="pollbtn" data-id="${x.id}" title="${esc(t('pollIntervalHint'))}">✎</button>`

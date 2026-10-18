@@ -109,6 +109,11 @@ def create_app(test_config=None):
             'apps_json': 'TEXT',
             'apps_at': 'BIGINT',
             'remote_capable': 'BOOLEAN',
+            'cpu_pct': 'REAL',
+            'mem_used_mb': 'INTEGER',
+            'mem_total_mb': 'INTEGER',
+            'net_down_kbps': 'INTEGER',
+            'net_up_kbps': 'INTEGER',
         })
         if not db.session.get(EmailSettings, 1):
             db.session.add(EmailSettings(id=1))
@@ -457,6 +462,16 @@ def create_app(test_config=None):
             dev.wifi_band = str(data['wifiBand'])[:10]
         if data.get('connType') is not None:
             dev.connection_type = str(data['connType'])[:20]
+        if data.get('cpuPct') is not None:
+            dev.cpu_pct = float(data['cpuPct'])
+        if data.get('memUsedMb') is not None:
+            dev.mem_used_mb = _int(data['memUsedMb'])
+        if data.get('memTotalMb') is not None:
+            dev.mem_total_mb = _int(data['memTotalMb'])
+        if data.get('netDownKbps') is not None:
+            dev.net_down_kbps = _int(data['netDownKbps'])
+        if data.get('netUpKbps') is not None:
+            dev.net_up_kbps = _int(data['netUpKbps'])
         if data.get('accessibilityEnabled') is not None:
             dev.accessibility_enabled = bool(data['accessibilityEnabled'])
         if data.get('remoteCapable') is not None:

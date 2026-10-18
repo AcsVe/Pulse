@@ -9,7 +9,7 @@ import socket
 
 import requests
 
-from . import db
+from . import db, netinfo, sysstats
 
 TIMEOUT = 15
 
@@ -76,6 +76,10 @@ def sync_once(net_totals=None):
     browse_rows = db.pending('browse_q')
     data_rows = db.pending('data_q')
 
+    conn_type, wifi_mbps = netinfo.primary_interface()
+    cpu_pct = sysstats.cpu_percent()
+    mem_used_mb, mem_total_mb = sysstats.memory_mb()
+
     body = {
         'usage': [{'package': r['package'], 'label': r['label'], 'start': r['start_ts'], 'end': r['end_ts']}
                   for r in usage_rows],
@@ -84,7 +88,11 @@ def sync_once(net_totals=None):
         'dataUsage': [{'package': r['package'], 'label': r['label'], 'ts': r['ts'], 'rx': r['rx'], 'tx': r['tx'],
                        'transport': r['transport']} for r in data_rows],
         'ip': _local_ip(),
-        'connType': 'Ethernet/WiFi',
+        'connType': conn_type or '',
+        'wifiMbps': wifi_mbps,
+        'cpuPct': cpu_pct,
+        'memUsedMb': mem_used_mb,
+        'memTotalMb': mem_total_mb,
         'model': platform.node() or 'Windows PC',
         'os': f'Windows {platform.release()}',
         'app': 'windows-client/1.0',
@@ -99,6 +107,10 @@ def sync_once(net_totals=None):
         body['dataUsage'].append({'package': '__device__', 'label': '__device__', 'ts': db.now_ms(),
                                    'rx': int(net_totals.get('rx') or 0), 'tx': int(net_totals.get('tx') or 0),
                                    'transport': ''})
+        if net_totals.get('downKbps') is not None:
+            body['netDownKbps'] = int(net_totals['downKbps'])
+        if net_totals.get('upKbps') is not None:
+            body['netUpKbps'] = int(net_totals['upKbps'])
 
     res = requests.post(f'{server_url}/api/v1/ingest', json=body,
                          headers={'Authorization': f'Bearer {token}'}, timeout=TIMEOUT)
