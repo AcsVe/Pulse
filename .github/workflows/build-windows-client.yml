@@ -71,7 +71,7 @@ jobs:
       # docstring). --onedir pays that cost once, at build time, instead.
       - name: Build PulseService
         working-directory: windows-client
-        run: pyinstaller --name PulseService --icon installer\pulse.ico --hidden-import win32timezone --hidden-import win32serviceutil service_main.py
+        run: pyinstaller --name PulseService --icon installer\pulse.ico --hidden-import win32timezone --hidden-import win32serviceutil --hidden-import win32ts --hidden-import win32profile service_main.py
 
       - name: Build PulseHelper
         working-directory: windows-client

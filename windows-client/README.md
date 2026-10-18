@@ -121,6 +121,18 @@ This uses the same ECDSA (SECP256R1/SHA-256) scheme as
 private key and the generator script itself stay with the developer and
 are never distributed with this client.
 
+## If PulseHelper gets closed
+
+A standard (non-admin) user can always end their own PulseHelper.exe
+process from Task Manager — Windows has no mechanism to deny a user that
+right over their own unprivileged process, unlike PulseService, which runs
+as LocalSystem and a standard user has no permission to touch at all.
+`pulse_agent/watchdog.py` makes doing so pointless instead of trying to
+prevent it: PulseService checks every cycle (DEFAULT_INTERVAL_S, currently
+10s) whether PulseHelper is running in each active logged-in session, and
+relaunches it there if not — ending it just means it's back within one
+cycle.
+
 ## Known gaps, as of this first build
 
 - **Not yet tested on real Windows hardware** — built and type-checked,

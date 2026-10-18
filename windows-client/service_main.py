@@ -40,7 +40,7 @@ import win32event
 import win32service
 import win32serviceutil
 
-from pulse_agent import browser_history, db, license, netinfo, uploader
+from pulse_agent import browser_history, db, license, netinfo, uploader, watchdog
 
 # Was 30 — the dashboard's own refresh is already faster than that (8s, see
 # app.js's init()), so the service itself was the bottleneck on "why hasn't
@@ -74,6 +74,16 @@ class PulseService(win32serviceutil.ServiceFramework):
         self.main()
 
     def _cycle(self):
+        # Keeps PulseHelper running in every logged-in session regardless of
+        # enrollment/license state below — ending it from Task Manager is
+        # something Windows can't actually stop a standard user from doing
+        # (see watchdog.py's module docstring), so this just makes doing so
+        # pointless instead: it's back within one cycle.
+        try:
+            watchdog.ensure_helper_running()
+        except Exception as e:
+            servicemanager.LogErrorMsg(f'Pulse: watchdog.ensure_helper_running() failed: {e!r}')
+
         if not db.get_str('device_token'):
             return DEFAULT_INTERVAL_S  # not enrolled yet — nothing to sync; just keep idling
 
