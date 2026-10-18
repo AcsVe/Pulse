@@ -1,0 +1,145 @@
+"""
+Pulse-Setup — the one-time setup tool for the Windows client. Run elevated
+(as Administrator) once per machine:
+
+    Pulse-Setup.exe enroll <serverUrl> <code>
+    Pulse-Setup.exe install
+    Pulse-Setup.exe status
+    Pulse-Setup.exe uninstall
+
+`install` does three things:
+  1. Grants the local Users group write access to C:\\ProgramData\\Pulse,
+     via icacls, by SID (S-1-5-32-545) rather than the localized name
+     "Users" — so this also works on non-English Windows installs. Needed
+     because PulseHelper runs as a plain logged-in user, not an admin, and
+     has to be able to queue rows into the shared sqlite file there.
+  2. Installs and starts PulseService (the Session-0 half) via its own
+     pywin32 service verbs.
+  3. Drops a shortcut to PulseHelper.exe into the ALL-USERS Startup folder
+     (not a per-user one, and not a Scheduled Task) — the simplest reliable
+     way to have it launch inside EVERY user's own desktop session at
+     logon, which is what PulseHelper actually needs (see its docstring).
+"""
+import ctypes
+import os
+import subprocess
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from pulse_agent import db, uploader
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SERVICE_EXE = os.path.join(HERE, 'PulseService.exe')
+HELPER_EXE = os.path.join(HERE, 'PulseHelper.exe')
+USERS_SID = 'S-1-5-32-545'
+STARTUP_DIR = os.path.join(os.environ.get('ProgramData', r'C:\ProgramData'),
+                            r'Microsoft\Windows\Start Menu\Programs\StartUp')
+SHORTCUT_PATH = os.path.join(STARTUP_DIR, 'PulseHelper.lnk')
+
+
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except Exception:
+        return False
+
+
+def require_admin():
+    if not is_admin():
+        print('This needs to run from an elevated (Administrator) prompt.')
+        sys.exit(1)
+
+
+def cmd_enroll(args):
+    if len(args) != 2:
+        print('Usage: Pulse-Setup.exe enroll <serverUrl> <code>')
+        sys.exit(1)
+    server_url, code = args
+    try:
+        res = uploader.enroll(server_url, code)
+        print(f"Enrolled as '{res.get('name')}' (device id {res.get('deviceId')}).")
+    except Exception as e:
+        print(f'Enrollment failed: {e}')
+        sys.exit(1)
+
+
+def _grant_programdata_access():
+    from pulse_agent import paths
+    paths.ensure_dirs()
+    subprocess.run(['icacls', paths.DATA_DIR, '/grant', f'*{USERS_SID}:(OI)(CI)M', '/T'],
+                   check=False, capture_output=True)
+
+
+def _install_startup_shortcut():
+    os.makedirs(STARTUP_DIR, exist_ok=True)
+    import win32com.client
+    shell = win32com.client.Dispatch('WScript.Shell')
+    sc = shell.CreateShortcut(SHORTCUT_PATH)
+    sc.TargetPath = HELPER_EXE
+    sc.WorkingDirectory = HERE
+    sc.Description = 'Pulse device-monitoring helper (runs per logged-in user)'
+    sc.save()
+
+
+def cmd_install(_args):
+    require_admin()
+    if not db.get_str('device_token'):
+        print('Not enrolled yet — run "Pulse-Setup.exe enroll <serverUrl> <code>" first.')
+        sys.exit(1)
+    if not os.path.exists(SERVICE_EXE):
+        print(f'{SERVICE_EXE} not found — keep Pulse-Setup.exe next to PulseService.exe and PulseHelper.exe.')
+        sys.exit(1)
+
+    print('Granting local Users write access to the shared data folder...')
+    _grant_programdata_access()
+
+    print('Installing and starting PulseService...')
+    subprocess.run([SERVICE_EXE, '--startup=auto', 'install'], check=True)
+    subprocess.run([SERVICE_EXE, 'start'], check=True)
+
+    print('Registering PulseHelper to start for every user at logon...')
+    _install_startup_shortcut()
+
+    print('Done. The service is running, and PulseHelper will start the next time anyone logs in')
+    print('(sign out/in now, or just reboot, to have it pick up the current session immediately).')
+
+
+def cmd_uninstall(_args):
+    require_admin()
+    if os.path.exists(SERVICE_EXE):
+        subprocess.run([SERVICE_EXE, 'stop'], check=False)
+        subprocess.run([SERVICE_EXE, 'remove'], check=False)
+    if os.path.exists(SHORTCUT_PATH):
+        os.remove(SHORTCUT_PATH)
+    subprocess.run(['taskkill', '/IM', 'PulseHelper.exe', '/F'], check=False, capture_output=True)
+    print('PulseService and the startup entry have been removed. Local data in '
+          f'{os.environ.get("ProgramData")}\\Pulse was left in place.')
+
+
+def cmd_status(_args):
+    url = db.get_str('server_url')
+    name = db.get_str('device_name')
+    if not url:
+        print('Not enrolled.')
+        return
+    print(f"Server: {url}\nDevice: {name or '(unnamed)'}")
+    try:
+        r = uploader.ping()
+        print(f"Reachable: yes (server time {r.get('now')})" if r else 'Reachable: no')
+    except Exception as e:
+        print(f'Reachable: no ({e})')
+
+
+COMMANDS = {'enroll': cmd_enroll, 'install': cmd_install, 'uninstall': cmd_uninstall, 'status': cmd_status}
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
+        print(f'Usage: Pulse-Setup.exe <{"|".join(COMMANDS)}> [args]')
+        sys.exit(1)
+    COMMANDS[sys.argv[1]](sys.argv[2:])
+
+
+if __name__ == '__main__':
+    main()

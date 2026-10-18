@@ -1,0 +1,121 @@
+"""
+Synthesizes mouse and keyboard input via the Win32 SendInput API, through
+ctypes directly rather than pywin32's older keybd_event/mouse_event calls —
+those only accept virtual-key codes, which are tied to the active keyboard
+layout and can't type arbitrary text (Arabic included, which matters here
+given this dashboard's own Arabic-first UI). SendInput's KEYEVENTF_UNICODE
+mode injects any Unicode character directly, bypassing layout entirely.
+
+This only works, and is only meant to run, inside PulseHelper — the
+per-user process in the logged-in user's own session. Session-0 input
+injection is blocked by the same session-isolation wall discussed in
+usage_tracker.py.
+"""
+import ctypes
+import time
+from ctypes import wintypes
+
+user32 = ctypes.windll.user32
+
+INPUT_MOUSE = 0
+INPUT_KEYBOARD = 1
+
+MOUSEEVENTF_MOVE = 0x0001
+MOUSEEVENTF_LEFTDOWN = 0x0002
+MOUSEEVENTF_LEFTUP = 0x0004
+MOUSEEVENTF_ABSOLUTE = 0x8000
+
+KEYEVENTF_KEYUP = 0x0002
+KEYEVENTF_UNICODE = 0x0004
+
+VK_LWIN = 0x5B
+VK_TAB = 0x09
+VK_MENU = 0x12   # Alt
+VK_LEFT = 0x25
+VK_RETURN = 0x0D
+
+
+class MOUSEINPUT(ctypes.Structure):
+    _fields_ = [('dx', wintypes.LONG), ('dy', wintypes.LONG), ('mouseData', wintypes.DWORD),
+                ('dwFlags', wintypes.DWORD), ('time', wintypes.DWORD),
+                ('dwExtraInfo', ctypes.POINTER(wintypes.ULONG))]
+
+
+class KEYBDINPUT(ctypes.Structure):
+    _fields_ = [('wVk', wintypes.WORD), ('wScan', wintypes.WORD), ('dwFlags', wintypes.DWORD),
+                ('time', wintypes.DWORD), ('dwExtraInfo', ctypes.POINTER(wintypes.ULONG))]
+
+
+class _INPUTunion(ctypes.Union):
+    _fields_ = [('mi', MOUSEINPUT), ('ki', KEYBDINPUT)]
+
+
+class INPUT(ctypes.Structure):
+    _fields_ = [('type', wintypes.DWORD), ('union', _INPUTunion)]
+
+
+def _send(*inputs):
+    arr = (INPUT * len(inputs))(*inputs)
+    user32.SendInput(len(inputs), arr, ctypes.sizeof(INPUT))
+
+
+def _screen_size():
+    return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+
+
+def _abs_coords(x, y):
+    sw, sh = _screen_size()
+    return int(x * 65535 / max(1, sw - 1)), int(y * 65535 / max(1, sh - 1))
+
+
+def move_to(x, y):
+    ax, ay = _abs_coords(x, y)
+    mi = MOUSEINPUT(ax, ay, 0, MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, 0, None)
+    _send(INPUT(INPUT_MOUSE, _INPUTunion(mi=mi)))
+
+
+def click(x, y):
+    move_to(x, y)
+    ax, ay = _abs_coords(x, y)
+    down = MOUSEINPUT(ax, ay, 0, MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_ABSOLUTE, 0, None)
+    up = MOUSEINPUT(ax, ay, 0, MOUSEEVENTF_LEFTUP | MOUSEEVENTF_ABSOLUTE, 0, None)
+    _send(INPUT(INPUT_MOUSE, _INPUTunion(mi=down)))
+    time.sleep(0.03)
+    _send(INPUT(INPUT_MOUSE, _INPUTunion(mi=up)))
+
+
+def drag(x1, y1, x2, y2, duration_ms):
+    """Linear-interpolated drag so the OS sees a real gesture (useful for
+    things like dismissing a toast or dragging a window) rather than a
+    teleport — mirrors why the Android app caps/paces its own swipe
+    duration (see app.js's endDrag) instead of just jumping the finger."""
+    steps = max(1, min(40, duration_ms // 16))
+    ax1, ay1 = _abs_coords(x1, y1)
+    down = MOUSEINPUT(ax1, ay1, 0, MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_ABSOLUTE, 0, None)
+    _send(INPUT(INPUT_MOUSE, _INPUTunion(mi=down)))
+    for i in range(1, steps + 1):
+        x = x1 + (x2 - x1) * i / steps
+        y = y1 + (y2 - y1) * i / steps
+        move_to(x, y)
+        time.sleep(max(0.005, duration_ms / 1000 / steps))
+    ax2, ay2 = _abs_coords(x2, y2)
+    up = MOUSEINPUT(ax2, ay2, 0, MOUSEEVENTF_LEFTUP | MOUSEEVENTF_ABSOLUTE, 0, None)
+    _send(INPUT(INPUT_MOUSE, _INPUTunion(mi=up)))
+
+
+def key_combo(*vks):
+    downs = [INPUT(INPUT_KEYBOARD, _INPUTunion(ki=KEYBDINPUT(vk, 0, 0, 0, None))) for vk in vks]
+    ups = [INPUT(INPUT_KEYBOARD, _INPUTunion(ki=KEYBDINPUT(vk, 0, KEYEVENTF_KEYUP, 0, None))) for vk in reversed(vks)]
+    _send(*downs)
+    time.sleep(0.03)
+    _send(*ups)
+
+
+def type_text(text):
+    for ch in text:
+        code = ord(ch)
+        down = INPUT(INPUT_KEYBOARD, _INPUTunion(ki=KEYBDINPUT(0, code, KEYEVENTF_UNICODE, 0, None)))
+        up = INPUT(INPUT_KEYBOARD, _INPUTunion(ki=KEYBDINPUT(0, code, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0, None)))
+        _send(down)
+        _send(up)
+        time.sleep(0.01)

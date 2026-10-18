@@ -1,0 +1,97 @@
+name: Build Pulse Windows Client
+
+# Packages windows-client/ into three standalone executables (Pulse-Setup,
+# PulseService, PulseHelper — see windows-client/README.md for what each
+# one does and why there are three) and publishes them as a zip, so the
+# stable link
+#   https://github.com/<owner>/<repo>/releases/latest/download/Pulse-Windows-Client.zip
+# always serves the newest build, the same pattern as build-server-exe.yml
+# and build-apk.yml.
+#
+# Must run on a Windows runner — this uses pywin32 (a real Windows Service)
+# and Win32 APIs throughout, so it can only be built on Windows, same
+# cross-compile limitation build-server-exe.yml already explains.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "windows-client/**"
+      - ".github/workflows/build-windows-client.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: windows-client
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # pywin32 ships its pywintypesXX.dll / pythoncomXX.dll under a
+      # pywin32_system32 folder that PyInstaller's onefile mode doesn't
+      # always manage to bundle correctly for a service exe — the
+      # well-known fix is just copying those two DLLs next to each built
+      # exe so Windows' loader finds them without needing them on PATH.
+      - name: Locate pywin32 system DLLs
+        id: pywin32dlls
+        shell: pwsh
+        run: |
+          $dir = python -c "import win32api, os; print(os.path.join(os.path.dirname(os.path.dirname(win32api.__file__)), 'pywin32_system32'))"
+          echo "dir=$dir" >> $env:GITHUB_OUTPUT
+
+      - name: Build Pulse-Setup.exe
+        working-directory: windows-client
+        run: pyinstaller --onefile --name Pulse-Setup --hidden-import win32timezone pulse_cli.py
+
+      - name: Build PulseService.exe
+        working-directory: windows-client
+        run: pyinstaller --onefile --name PulseService --hidden-import win32timezone --hidden-import win32serviceutil service_main.py
+
+      - name: Build PulseHelper.exe
+        working-directory: windows-client
+        run: pyinstaller --onefile --windowed --name PulseHelper helper.py
+
+      - name: Collect into one folder
+        working-directory: windows-client
+        shell: pwsh
+        run: |
+          mkdir out
+          copy dist\Pulse-Setup.exe out\
+          copy dist\PulseService.exe out\
+          copy dist\PulseHelper.exe out\
+          if (Test-Path README.md) { copy README.md out\ }
+          $dlls = "${{ steps.pywin32dlls.outputs.dir }}"
+          if (Test-Path $dlls) { copy "$dlls\*.dll" out\ }
+
+      - name: Zip
+        working-directory: windows-client
+        run: Compress-Archive -Path out\* -DestinationPath Pulse-Windows-Client.zip
+        shell: pwsh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pulse-Windows-Client
+          path: windows-client/Pulse-Windows-Client.zip
+
+      - name: Publish release (stable download link)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete windows-client-latest --cleanup-tag --yes || true
+          gh release create windows-client-latest windows-client/Pulse-Windows-Client.zip \
+            --title "Pulse Windows client" \
+            --notes "Standalone Windows client (Pulse-Setup.exe, PulseService.exe, PulseHelper.exe). Built from ${GITHUB_SHA::7}. Unzip into its own folder, then from an elevated prompt: Pulse-Setup.exe enroll <serverUrl> <code>, then Pulse-Setup.exe install." \
+            --latest

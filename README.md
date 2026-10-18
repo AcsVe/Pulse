@@ -277,6 +277,24 @@ Requested but not built, for the reasons below:
 3. Grant the permission checklist (Usage Access, Accessibility, battery
    exemption, notifications, VPN) and tap **Start monitoring**.
 
+## Windows client
+
+`windows-client/` is a monitored-*device* client for Windows PCs (same role
+as `android-app/`, different OS) — app usage, Chrome/Edge browser history,
+whole-device network totals, and remote control, talking to the exact same
+server API with no server-side changes. See `windows-client/README.md` for
+the full picture; in short, it's three executables rather than one,
+because Windows' session isolation means a true Windows Service (Session
+0) can never see a logged-in user's screen, foreground window, or input —
+so **PulseService.exe** (the service) handles everything that doesn't need
+that, and **PulseHelper.exe** (started per-user at logon, not a service)
+handles app-usage tracking and remote control. **Pulse-Setup.exe** is the
+one-time install tool that wires both of those up on a machine. Built by
+`.github/workflows/build-windows-client.yml`, publishing
+`Pulse-Windows-Client.zip` to the repo's `windows-client-latest` release.
+Not yet tested on a real Windows machine — see that README's "Known gaps"
+section.
+
 ## Admin app
 
 `admin-app/` is a separate, much smaller Android app for the people viewing
@@ -310,6 +328,7 @@ whoever already has a login signs in the same way they would on the web.
 ```
 server/            Flask app, dashboard, stats
 android-app/       Capacitor shell + native-src/ (hand-written Java) — the on-device collector
+windows-client/    PulseService + PulseHelper + Pulse-Setup — the Windows on-device client
 admin-app/         Plain WebView wrapper around the dashboard — for admins, not monitored devices
-.github/workflows/ CI: builds and releases both APKs
+.github/workflows/ CI: builds and releases the APKs, the server .exe, and the Windows client
 ```
