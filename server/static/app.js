@@ -84,7 +84,7 @@ const T = {
     remoteCloseHint:'"إغلاق" يُرجع الهاتف للشاشة الرئيسية ثم يوقف العملية الخلفية لذلك التطبيق — يماثل سحبه من قائمة الأخيرة، وليس إغلاقاً قسرياً مضموناً مثل زر النظام (لا تسمح أندرويد لأي تطبيق عادي بذلك).',
     remoteOffline:'لا يمكن التحكم عن بعد بجهاز غير متصل',
     remoteKeyboard:'لوحة المفاتيح', remoteRightClick:'كليك يمين (للنقرة القادمة)',
-    remoteRightClickHint:'فعّل 🖱️ ثم اضغط بالمكان المطلوب — نقرة واحدة فقط تصبح كليك يمين',
+    remoteRightClickHint:'كليك يمين: اضغط بإصبعين معاً دون تحريك (كتراك باد اللابتوب)، أو فعّل 🖱️ ثم اضغط بالمكان المطلوب',
     users:'المستخدمون', addUser:'إضافة مستخدم', username:'اسم المستخدم', password:'كلمة المرور',
     role:'الصلاحية', roleSuperadmin:'مدير كامل', roleAdmin:'مدير', roleViewer:'مشاهد فقط',
     deviceAccess:'الأجهزة المتاحة', active:'نشِط', inactive:'موقوف', resetPassword:'كلمة مرور جديدة',
@@ -161,7 +161,7 @@ const T = {
     remoteCloseHint:'"Close" sends the phone home then kills that app\'s background process — the same as swiping it off Recents, not a guaranteed force-stop like the system Settings button (no normal app is allowed to do that on Android).',
     remoteOffline:"Can't remote-control an offline device",
     remoteKeyboard:'Keyboard', remoteRightClick:'Right-click (next tap)',
-    remoteRightClickHint:'Turn on 🖱️, then tap where you want — just that one tap becomes a right-click',
+    remoteRightClickHint:'Right-click: tap with two fingers together without moving (like a laptop trackpad), or turn on 🖱️ then tap where you want',
     users:'Users', addUser:'Add user', username:'Username', password:'Password',
     role:'Role', roleSuperadmin:'Full admin', roleAdmin:'Admin', roleViewer:'Viewer only',
     deviceAccess:'Device access', active:'Active', inactive:'Inactive', resetPassword:'Reset password',
@@ -1355,9 +1355,21 @@ function openRemotePanel(id, name) {
     RC.pinch = null;
     const e0 = p.e0 || p.s0, e1 = p.e1 || p.s1;
     const dur = Math.max(80, Math.min(1500, Date.now() - p.t));
-    tapFx((p.s0.x + p.s1.x) / 2, (p.s0.y + p.s1.y) / 2);
+    const midX = (p.s0.x + p.s1.x) / 2, midY = (p.s0.y + p.s1.y) / 2;
+    tapFx(midX, midY);
     const dx = px => Math.round((px / p.w) * (RC.w || img.naturalWidth || 1080));
     const dy = px => Math.round((px / p.h) * (RC.h || img.naturalHeight || 1920));
+    // A quick two-finger TAP (both fingers barely moved, released quickly)
+    // is a right-click — same gesture a laptop trackpad already uses,
+    // which AnyDesk/TeamViewer also rely on for this. Only on Windows
+    // devices; Android has no such gesture (pinch/zoom is all it ever
+    // means there), so a real pinch there is never misread as this.
+    const moved0 = Math.hypot(e0.x - p.s0.x, e0.y - p.s0.y);
+    const moved1 = Math.hypot(e1.x - p.s1.x, e1.y - p.s1.y);
+    if (isWindows && moved0 < 16 && moved1 < 16 && dur < 450) {
+      remoteCmd({ action: 'rightclick', x: dx(midX), y: dy(midY) });
+      return;
+    }
     remoteCmd({ action: 'pinch', duration: dur, touches: [
       [dx(p.s0.x), dy(p.s0.y), dx(e0.x), dy(e0.y)],
       [dx(p.s1.x), dy(p.s1.y), dx(e1.x), dy(e1.y)],
