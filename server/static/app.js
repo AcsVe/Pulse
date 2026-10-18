@@ -430,6 +430,25 @@ async function renderOverview() {
   // transport (wifi/cellular) pie
   const transLabel = k => ({ wifi: t('wifi'), cellular: t('cellular') })[k] || (k === 'unknown' ? t('unknownTransport') : k);
   const transParts = Object.entries(d.net.transportMs || {}).map(([k, v]) => ({ name: transLabel(k), v }));
+  // transportMs only has anything in it once NetEvent rows exist — Android's
+  // own connectivity-outage tracking (connected/no-internet spans over
+  // time). The Windows client doesn't generate those; it only reports a
+  // live Device.connectionType/wifiMbps snapshot (see patch "Report real
+  // CPU/RAM/connection-type/network-speed"). Falling back to that snapshot
+  // here — instead of just showing an empty pie — is what actually answers
+  // "what's this device connected through right now" for those devices.
+  const connScope = (S.devices ? S.allDevices.filter(dv => S.devices.includes(dv.id)) : S.allDevices) || [];
+  const liveConnDevices = connScope.filter(dv => dv.connectionType);
+  const connLabel = c => c === 'wifi' ? t('wifi') : c === 'cellular' ? t('cellular')
+    : c === 'ethernet' ? 'Ethernet' : c === 'none' ? t('connNone') : t('connUnknown');
+  const connCardBody = transParts.length ? pieChart(transParts, v => fmtDur(v))
+    : liveConnDevices.length
+      ? `<div class="conn-live-list">${liveConnDevices.map(dv => {
+          const label = connLabel(dv.connectionType) + (dv.connectionType === 'wifi' && dv.wifiBand ? ` (${dv.wifiBand})` : '');
+          const speed = dv.wifiMbps ? ` · ${dv.wifiMbps} Mbps` : '';
+          return `<div class="conn-live-row"><b>${esc(dv.name)}</b><span>${esc(label + speed)}</span></div>`;
+        }).join('')}</div>`
+      : `<div class="empty">${t('noData')}</div>`;
   // websites pie (reuse topDomains)
   const siteParts = d.topDomains.map(x => ({ name: x.domain, v: x.count }));
 
@@ -439,7 +458,7 @@ async function renderOverview() {
     <div class="grid cols2">
       <div class="card"><h3>${t('dailyUse')}</h3>${barChart(cur, prev)}<div class="legend"><span><i style="background:var(--teal)"></i>${t('current')}</span><span><i style="background:#aebfcc"></i>${t('previous')}</span></div></div>
       <div class="card"><h3>${t('hourlyUse')}</h3>${barChart(hrs, null)}</div>
-      <div class="card"><h3>${t('connPie')}</h3>${pieChart(transParts, v => fmtDur(v))}</div>
+      <div class="card"><h3>${t('connPie')}</h3>${connCardBody}</div>
       <div class="card"><h3>${t('net')}</h3>
         <div style="display:flex;height:22px;border-radius:8px;overflow:hidden;background:#e8eff4">${netBar}</div><div class="legend">${netLegend}</div>
         <h3 style="margin-top:16px">${t('outageDaily')}</h3>${stackedChart(d.daily)}</div>
@@ -1467,7 +1486,36 @@ async function tickRemoteFrame() {
     } catch (e) { /* ignore — keep last known resolution/state */ }
   }
   const img = $('#rcImg'); if (!img) return;
-  img.src = `/api/devices/${RC.id}/screen.jpg?t=${Date.now()}` + (K.key ? `&key=${encodeURIComponent(K.key)}` : '');
+  const url = `/api/devices/${RC.id}/screen.jpg?t=${Date.now()}` + (K.key ? `&key=${encodeURIComponent(K.key)}` : '');
+  // Setting img.src straight to a new URL every 300ms is what caused the
+  // flicker/blink on every poll: the browser clears the currently-shown
+  // bitmap the instant src changes, then repaints only once the new one
+  // has *finished* downloading — so the visible frame goes blank for that
+  // gap, every single tick, which reads as constant flicker (worse on
+  // mobile where that round trip takes longer relative to the 300ms poll).
+  // Fetching the bytes and pre-loading them into an off-screen Image first
+  // means the swap only touches the visible <img> once the new frame is
+  // already fully decoded — it replaces frame N-1 with frame N in one
+  // paint, never a blank frame in between. Screen responses are served
+  // Cache-Control: no-store (server/app.py), so this still does exactly
+  // one network request per tick, same as before.
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('http ' + resp.status);
+    const blob = await resp.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const pre = new Image();
+    pre.onload = () => {
+      const old = RC.lastObjectUrl;
+      img.src = objUrl;
+      RC.lastObjectUrl = objUrl;
+      if (old) URL.revokeObjectURL(old);
+    };
+    pre.onerror = () => { URL.revokeObjectURL(objUrl); img.onerror(); };
+    pre.src = objUrl;
+  } catch (e) {
+    img.onerror();
+  }
 }
 function remoteCmd(body) {
   if (!RC.id) return;
@@ -1511,6 +1559,7 @@ function renderRemoteApps() {
 function closeRemotePanel() {
   if (RC.timer) clearInterval(RC.timer);
   if (RC.id) jpost(`/api/devices/${RC.id}/remote/stop`, {}, 'POST');
+  if (RC.lastObjectUrl) { URL.revokeObjectURL(RC.lastObjectUrl); RC.lastObjectUrl = null; }
   RC.id = null; RC.timer = null;
   $('#remoteModal').hidden = true;
   $('#remoteModal').innerHTML = '';
@@ -1571,6 +1620,11 @@ function renderSidebar() {
 }
 function openSidebar() {
   const sb = $('#sidebar'), bd = $('#sidebarBackdrop'); if (!sb || !bd) return;
+  // Re-render right here instead of trusting whatever ran at page-load —
+  // a blank drawer (buttons never populated) is worse than a slightly
+  // stale one, and this makes the drawer self-healing regardless of what
+  // order init() ran its other steps in.
+  try { renderSidebar(); } catch (e) { console.error('Pulse: renderSidebar failed', e); }
   sb.hidden = false; bd.hidden = false;
   requestAnimationFrame(() => sb.classList.add('open'));
 }
@@ -1583,7 +1637,14 @@ function paintStatic() {
   $('#langBtn').textContent = t('lang'); $('#refreshBtn').textContent = t('refresh');
   $('#exportPdfBtn').textContent = t('exportPdf');
   const lo = $('#logoutBtn'); if (lo) lo.textContent = t('logout');
-  renderChips(); renderTabs(); renderSidebar(); renderDevPop();
+  // Each call wrapped separately so one throwing (e.g. a bad translation
+  // key) can't silently skip the rest — renderSidebar() in particular used
+  // to be left unpopulated for the rest of the session if renderChips() or
+  // renderTabs() threw first, since they all used to run as one unguarded
+  // sequence.
+  [renderChips, renderTabs, renderSidebar, renderDevPop].forEach(fn => {
+    try { fn(); } catch (e) { console.error(`Pulse: ${fn.name} failed`, e); }
+  });
   watchStickyOffsets();
 }
 // .top (the navy header bar) wraps onto a second line once its buttons
