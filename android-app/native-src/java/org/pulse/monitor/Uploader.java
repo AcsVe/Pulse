@@ -237,6 +237,35 @@ public class Uploader {
         } catch (Exception ignored) { }
     }
 
+    /**
+     * Used when the app owner just wants to point an already-enrolled device at a
+     * new address for the SAME server (moved to another PC, router handed out a new
+     * LAN IP, port changed, etc). The device's token is a row in that server's own
+     * database and isn't tied to any particular URL, so this never re-enrolls or
+     * touches the token — it only confirms the new address actually answers as the
+     * same account before the app commits to it, via GET /api/v1/ping with the
+     * device's existing bearer token (a 401 there means right address, wrong/foreign
+     * server — e.g. token from a different Pulse instance — which is also worth
+     * catching before saving).
+     */
+    public static boolean checkServer(String serverUrl, String token) {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(serverUrl + "/api/v1/ping").openConnection();
+            try {
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(TIMEOUT);
+                conn.setReadTimeout(TIMEOUT);
+                conn.setRequestProperty("Authorization", "Bearer " + token);
+                int code = conn.getResponseCode();
+                return code >= 200 && code < 300;
+            } finally {
+                conn.disconnect();
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private static JSONObject post(String urlStr, JSONObject body, String bearer) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
         try {

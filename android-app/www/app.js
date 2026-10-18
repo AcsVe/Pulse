@@ -5,6 +5,10 @@ const T = {
     consentTitle: 'هذا الجهاز يخضع للمراقبة', consentAgree: 'أوافق على تشغيل المراقبة على هذا الجهاز', continue: 'متابعة',
     connectTitle: 'الاتصال بالخادم', serverUrl: 'رابط الخادم', enrollCode: 'رمز الربط', connect: 'اتصال', cancel: 'إلغاء',
     relink: 'تحديث رمز الربط', relinkHint: 'استخدم هذا لتحديث رمز الربط بعد توليد رمز جديد من لوحة التحكم — بلا حذف أو إعادة تثبيت التطبيق.',
+    changeUrl: 'تغيير رابط الخادم', changeUrlTitle: 'تغيير رابط الخادم', save: 'حفظ',
+    changeUrlHint: 'لاستخدام هذا الجهاز نفسه فقط عند تغيّر عنوانه (انتقل إلى كمبيوتر آخر، أو تغيّر عنوان IP/المنفذ) — دون رمز ربط جديد ودون قطع الاتصال الحالي. إن كنت تنقل الجهاز إلى خادم مختلف تماماً، استخدم "تحديث رمز الربط" بدلاً من هذا.',
+    changeUrlUnreachable: 'تعذّر الوصول إلى هذا الرابط بهذا التسجيل. تأكد من الرابط، أو اضغط حفظ مرة أخرى للحفظ رغم ذلك.',
+    changeUrlSaved: 'تم الحفظ',
     permsTitle: 'الأذونات المطلوبة', permsHint: 'امنح كل إذن لتعمل كل الميزات بشكل صحيح', start: 'بدء المراقبة',
     runningTitle: 'المراقبة تعمل', device: 'الجهاز', server: 'الخادم', lastSync: 'آخر مزامنة', queued: 'بانتظار الإرسال',
     syncNow: 'مزامنة الآن', syncing: 'جارٍ المزامنة...', checkPerms: 'إعادة فحص الأذونات', stop: 'إيقاف المراقبة',
@@ -35,6 +39,10 @@ const T = {
     consentTitle: 'This device is monitored', consentAgree: 'I agree to run monitoring on this device', continue: 'Continue',
     connectTitle: 'Connect to server', serverUrl: 'Server URL', enrollCode: 'Enrollment code', connect: 'Connect', cancel: 'Cancel',
     relink: 'Update linking code', relinkHint: 'Use this to update the linking code after generating a new one from the dashboard — no need to uninstall or reinstall the app.',
+    changeUrl: 'Change server address', changeUrlTitle: 'Change server address', save: 'Save',
+    changeUrlHint: 'For this same device only, when its address changed (moved to another computer, a new IP/port) — no new linking code needed, and the current connection keeps working. If you\'re moving this device to a different server entirely, use "Update linking code" instead.',
+    changeUrlUnreachable: 'Could not reach that address with this device\'s registration. Double-check the address, or tap Save again to save it anyway.',
+    changeUrlSaved: 'Saved',
     permsTitle: 'Required permissions', permsHint: 'Grant each permission so every feature works correctly', start: 'Start monitoring',
     runningTitle: 'Monitoring is running', device: 'Device', server: 'Server', lastSync: 'Last sync', queued: 'Queued',
     syncNow: 'Sync now', syncing: 'Syncing...', checkPerms: 'Recheck permissions', stop: 'Stop monitoring',
@@ -65,7 +73,7 @@ const T = {
 let lang = 'ar';
 const t = k => (T[lang] && T[lang][k]) || k;
 const $ = s => document.querySelector(s);
-const SECTIONS = ['lock', 'pinSetup', 'consent', 'enroll', 'perms', 'status'];
+const SECTIONS = ['lock', 'pinSetup', 'consent', 'enroll', 'changeUrl', 'perms', 'status'];
 const show = id => { SECTIONS.forEach(s => $('#' + s).classList.toggle('hidden', s !== id)); };
 
 function paint() {
@@ -74,6 +82,7 @@ function paint() {
   $('#langBtn').textContent = lang === 'ar' ? 'EN' : 'عربي';
   document.querySelectorAll('[data-t]').forEach(e => { e.textContent = t(e.dataset.t); });
   $('#serverUrl').placeholder = 'https://pulse.example.com';
+  $('#changeUrlInput').placeholder = 'https://pulse.example.com';
 }
 
 const Pulse = () => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Pulse) || null;
@@ -229,6 +238,46 @@ async function init() {
     } finally { $('#enrollBtn').disabled = false; }
   };
   $('#enrollCancelBtn').onclick = () => { show('status'); refreshStatus(); };
+
+  // Change server address: same device/token, just a new network address for the
+  // same server (moved to another PC, new LAN IP, different port, ...). Distinct
+  // from relink below, which always burns a fresh code and a brand-new token —
+  // overkill, and disruptive, for something that isn't actually a re-registration.
+  let changeUrlUnverified = false; // true right after a failed reachability check, so a 2nd tap force-saves
+  $('#changeUrlOpenBtn').onclick = async () => {
+    const p = Pulse(); if (!p) return;
+    const cfg = await p.getConfig();
+    $('#changeUrlInput').value = cfg.serverUrl || '';
+    $('#changeUrlErr').classList.add('hidden');
+    changeUrlUnverified = false;
+    show('changeUrl');
+  };
+  $('#changeUrlCancelBtn').onclick = () => { show('status'); refreshStatus(); };
+  $('#changeUrlBtn').onclick = async () => {
+    const p = Pulse(); if (!p) return;
+    const serverUrl = $('#changeUrlInput').value.trim().replace(/\/+$/, '');
+    if (!serverUrl) return;
+    const err = $('#changeUrlErr');
+    err.classList.add('hidden');
+    $('#changeUrlBtn').disabled = true;
+    try {
+      await p.setServerUrl({ serverUrl, force: changeUrlUnverified });
+      changeUrlUnverified = false;
+      show('status'); refreshStatus();
+    } catch (e) {
+      // First failure: offer a second tap to save anyway (server might just be
+      // offline right now while the address itself is correct). Any other error
+      // (not yet enrolled) just shows the message without that retry escape hatch.
+      if (String(e && e.message || '').includes('unreachable')) {
+        changeUrlUnverified = true;
+        err.textContent = t('changeUrlUnreachable');
+      } else {
+        err.textContent = t('invalidCode');
+      }
+      err.classList.remove('hidden');
+    } finally { $('#changeUrlBtn').disabled = false; }
+  };
+
   $('#relinkBtn').onclick = async () => {
     const p = Pulse(); if (!p) return;
     const cfg = await p.getConfig();

@@ -73,6 +73,47 @@ public class PulsePlugin extends Plugin {
         }).start();
     }
 
+    /**
+     * Lightweight counterpart to enroll(): changes ONLY the stored server address,
+     * keeping the device's existing token/id as-is. enroll() always burns a fresh
+     * one-time code and issues a brand-new token (see the server's /api/v1/enroll),
+     * which is overkill when nothing about the registration changed — just the
+     * network address of the same server (moved to another PC, new LAN IP after a
+     * router reboot, a different port, a domain swapped in for a raw IP, ...).
+     * Without `force`, the new address is verified (device's current token still
+     * accepted there) before it's saved, so a typo or wrong address doesn't silently
+     * break syncing until the next failed attempt.
+     */
+    @PluginMethod
+    public void setServerUrl(PluginCall call) {
+        String serverUrl = call.getString("serverUrl", "").trim().replaceAll("/+$", "");
+        boolean force = call.getBoolean("force", false);
+        if (TextUtils.isEmpty(serverUrl)) {
+            call.reject("serverUrl is required");
+            return;
+        }
+        Db db = Db.get(getContext());
+        String token = db.getStr("device_token", null);
+        if (TextUtils.isEmpty(token)) {
+            call.reject("not_enrolled");
+            return;
+        }
+        if (force) {
+            db.put("server_url", serverUrl);
+            call.resolve();
+            return;
+        }
+        new Thread(() -> {
+            boolean ok = Uploader.checkServer(serverUrl, token);
+            if (ok) {
+                db.put("server_url", serverUrl);
+                call.resolve();
+            } else {
+                call.reject("unreachable");
+            }
+        }).start();
+    }
+
     @PluginMethod
     public void getPermStatus(PluginCall call) {
         Context ctx = getContext();
