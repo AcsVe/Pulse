@@ -49,10 +49,16 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      # --icon so the built .exe carries the Pulse icon in Explorer/Task
+      # Manager instead of PyInstaller's own default feather icon, which
+      # otherwise instantly reads as "this is a Python app". Same icon the
+      # Windows client's installer and its own exes use (see
+      # windows-client/installer/pulse.ico's own comment for where it's
+      # generated from).
       - name: Build Pulse-Server.exe
         working-directory: server
         run: |
-          pyinstaller --onefile --name Pulse-Server --add-data "templates;templates" --add-data "static;static" app.py
+          pyinstaller --onefile --name Pulse-Server --icon ..\windows-client\installer\pulse.ico --add-data "templates;templates" --add-data "static;static" app.py
 
       - uses: actions/upload-artifact@v4
         with:

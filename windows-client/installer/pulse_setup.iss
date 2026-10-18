@@ -21,12 +21,19 @@
 ;     line, no separate steps to get wrong.
 ;   - A second wizard page shows this device's fingerprint (read directly
 ;     from the registry — the exact same value pulse_agent/license.py
-;     reads at runtime) so it can be sent to the developer, and lets an
-;     already-issued activation key be entered right away. See
+;     reads at runtime) in a real, read-only edit box (auto-selected, so
+;     Ctrl+C alone copies it — the plain description text a first version
+;     of this page used turned out not to be selectable at all), and lets
+;     an already-issued activation key be entered right away. See
 ;     pulse_agent/license.py's module docstring for the full
 ;     fingerprint-then-key round trip this pairs with. The service installs
 ;     and enrolls either way — it just won't report any data to the
 ;     dashboard until a valid key is on file (enforced in service_main.py).
+;   - Uninstalling removes everything: the service, the Startup shortcut,
+;     every installed file/folder, AND the local data folder under
+;     ProgramData (queue db, enrollment, license) — a true clean slate,
+;     not just what Pulse-Setup.exe uninstall does on its own (see
+;     [UninstallDelete] below for why those are different).
 ;
 ; Built by .github/workflows/build-windows-client.yml, which first builds
 ; Pulse-Setup.exe/PulseService/PulseHelper exactly as before, collects them
@@ -83,10 +90,21 @@ Filename: "{app}\Pulse-Setup.exe"; Parameters: "license ""{code:GetLicenseKey}""
 Filename: "{app}\Pulse-Setup.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "PulseUninstall"
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Remove-MpPreference -ExclusionPath '{app}' -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated; RunOnceId: "PulseRemoveExclusion"
 
+[UninstallDelete]
+; Pulse-Setup.exe uninstall (above) only stops/removes the service and the
+; Startup shortcut — it deliberately leaves C:\ProgramData\Pulse (the local
+; queue db, enrollment, activated license) in place, since that command is
+; also what a plain in-place update effectively runs. A full uninstall from
+; here is a clean slate instead: removes that data too, alongside every
+; file/folder Inno itself installed under {app} (handled automatically).
+Type: filesandordirs; Name: "{commonappdata}\Pulse"
+
 [Code]
 var
   EnrollPage: TInputQueryWizardPage;
-  LicensePage: TInputQueryWizardPage;
+  LicensePage: TWizardPage;
+  FingerprintEdit: TNewEdit;
+  LicenseKeyEdit: TNewEdit;
 
 function DBExists: Boolean;
 begin
@@ -119,14 +137,50 @@ begin
   EnrollPage.Add('Server URL (e.g. https://pulse.example.com):', False);
   EnrollPage.Add('Linking code:', False);
 
-  LicensePage := CreateInputQueryPage(EnrollPage.ID,
-    'Device license',
-    'This device''s fingerprint — send it to the developer so they can issue your activation key:',
-    GetMachineFingerprint + #13#10#13#10 +
-    'If you already received a key, paste it below. Otherwise leave this blank — the service will ' +
-    'still install and enroll, but won''t report any data to the dashboard until you activate it later ' +
-    'from an elevated prompt: Pulse-Setup.exe license <key>');
-  LicensePage.Add('Activation key (leave blank to activate later):', False);
+  // A plain CreateInputQueryPage description is a static label, not a real
+  // control — it can't be click-selected or Ctrl+C'd, which is exactly
+  // what made the fingerprint unusable the first time this page shipped
+  // (reported as "it's basically a picture, how do I copy it"). Built as a
+  // custom page instead, with the fingerprint in a real (read-only) edit
+  // box — any ordinary Windows edit box supports select + copy natively,
+  // no extra code needed for that part.
+  LicensePage := CreateCustomPage(EnrollPage.ID, 'Device license',
+    'Copy the code below and send it to the developer to get your activation key');
+
+  FingerprintEdit := TNewEdit.Create(LicensePage);
+  FingerprintEdit.Parent := LicensePage.Surface;
+  FingerprintEdit.Top := ScaleY(4);
+  FingerprintEdit.Left := 0;
+  FingerprintEdit.Width := LicensePage.SurfaceWidth;
+  FingerprintEdit.ReadOnly := True;
+  FingerprintEdit.Text := GetMachineFingerprint;
+
+  with TNewStaticText.Create(LicensePage) do begin
+    Parent := LicensePage.Surface;
+    Top := FingerprintEdit.Top + FingerprintEdit.Height + ScaleY(20);
+    Left := 0;
+    Caption := 'Already have a key from the developer? Paste it below — otherwise leave it blank ' +
+      'and activate later (the service still installs and enrolls either way):';
+    AutoSize := True;
+    WordWrap := True;
+    Width := LicensePage.SurfaceWidth;
+  end;
+
+  LicenseKeyEdit := TNewEdit.Create(LicensePage);
+  LicenseKeyEdit.Parent := LicensePage.Surface;
+  LicenseKeyEdit.Top := FingerprintEdit.Top + FingerprintEdit.Height + ScaleY(56);
+  LicenseKeyEdit.Left := 0;
+  LicenseKeyEdit.Width := LicensePage.SurfaceWidth;
+end;
+
+// Selecting the fingerprint the instant this page is shown means Ctrl+C
+// alone copies it — no click-drag needed at all.
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (LicensePage <> nil) and (CurPageID = LicensePage.ID) then begin
+    FingerprintEdit.SetFocus;
+    FingerprintEdit.SelectAll;
+  end;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -164,12 +218,12 @@ end;
 
 function GetLicenseKey(Param: string): string;
 begin
-  Result := Trim(LicensePage.Values[0]);
+  Result := Trim(LicenseKeyEdit.Text);
 end;
 
 function HasLicenseKey: Boolean;
 begin
-  Result := Trim(LicensePage.Values[0]) <> '';
+  Result := Trim(LicenseKeyEdit.Text) <> '';
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

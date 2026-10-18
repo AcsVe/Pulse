@@ -902,13 +902,17 @@ def create_app(test_config=None):
         # original Android gesture set rather than replacing it, since
         # Android devices never send either.
         if action not in ('tap', 'swipe', 'pinch', 'text', 'back', 'home', 'recents', 'launch', 'close',
-                           'rightclick', 'key'):
+                           'rightclick', 'key', 'scroll'):
             return jsonify({'error': 'bad_action'}), 400
         if action in ('launch', 'close') and not (data.get('pkg') or '').strip():
             return jsonify({'error': 'pkg_required'}), 400
         if action == 'key' and not (data.get('key') or '').strip():
             return jsonify({'error': 'key_required'}), 400
-        params = {k: data[k] for k in ('x', 'y', 'x2', 'y2', 'duration', 'text', 'pkg', 'key', 'modifiers') if k in data}
+        if action == 'scroll' and not (isinstance(data.get('dx'), (int, float))
+                                        and isinstance(data.get('dy'), (int, float))):
+            return jsonify({'error': 'scroll_delta_required'}), 400
+        params = {k: data[k] for k in ('x', 'y', 'x2', 'y2', 'duration', 'text', 'pkg', 'key', 'modifiers',
+                                        'dx', 'dy') if k in data}
         if 'modifiers' in params and not (isinstance(params['modifiers'], list)
                                            and all(isinstance(m, str) for m in params['modifiers'])):
             return jsonify({'error': 'bad_modifiers'}), 400

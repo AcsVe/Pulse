@@ -51,12 +51,17 @@ jobs:
           $dir = python -c "import win32api, os; print(os.path.join(os.path.dirname(os.path.dirname(win32api.__file__)), 'pywin32_system32'))"
           echo "dir=$dir" >> $env:GITHUB_OUTPUT
 
+      # --icon on every single one of these: without it, PyInstaller stamps
+      # its own default feather icon on the .exe, which is exactly what
+      # instantly reads as "this is a Python app" in Explorer/Task
+      # Manager/taskbar — every exe gets installer/pulse.ico instead.
+      #
       # Pulse-Setup is a one-shot CLI tool with no startup-time budget to
       # respect, so --onefile (slower to launch, but a single small file)
       # is the right trade here.
       - name: Build Pulse-Setup.exe
         working-directory: windows-client
-        run: pyinstaller --onefile --name Pulse-Setup --hidden-import win32timezone pulse_cli.py
+        run: pyinstaller --onefile --name Pulse-Setup --icon installer\pulse.ico --hidden-import win32timezone pulse_cli.py
 
       # PulseService and PulseHelper are built --onedir (the PyInstaller
       # default, a folder of files rather than one compressed exe) —
@@ -66,11 +71,11 @@ jobs:
       # docstring). --onedir pays that cost once, at build time, instead.
       - name: Build PulseService
         working-directory: windows-client
-        run: pyinstaller --name PulseService --hidden-import win32timezone --hidden-import win32serviceutil service_main.py
+        run: pyinstaller --name PulseService --icon installer\pulse.ico --hidden-import win32timezone --hidden-import win32serviceutil service_main.py
 
       - name: Build PulseHelper
         working-directory: windows-client
-        run: pyinstaller --windowed --name PulseHelper helper.py
+        run: pyinstaller --windowed --name PulseHelper --icon installer\pulse.ico helper.py
 
       - name: Collect into one folder
         working-directory: windows-client

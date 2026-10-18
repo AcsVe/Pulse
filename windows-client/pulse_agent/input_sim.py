@@ -25,7 +25,10 @@ MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
 MOUSEEVENTF_RIGHTDOWN = 0x0008
 MOUSEEVENTF_RIGHTUP = 0x0010
+MOUSEEVENTF_WHEEL = 0x0800
+MOUSEEVENTF_HWHEEL = 0x1000
 MOUSEEVENTF_ABSOLUTE = 0x8000
+WHEEL_DELTA = 120  # one Win32 "notch" — mouseData for MOUSEEVENTF_WHEEL/HWHEEL is a multiple of this
 
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_UNICODE = 0x0004
@@ -114,6 +117,31 @@ def right_click(x, y):
     _send(INPUT(INPUT_MOUSE, _INPUTunion(mi=down)))
     time.sleep(0.03)
     _send(INPUT(INPUT_MOUSE, _INPUTunion(mi=up)))
+
+
+def scroll(dx, dy):
+    """Two-finger-drag-to-scroll from the dashboard's remote-control panel
+    (app.js's finishPinch — a two-finger pan that isn't a quick stationary
+    tap) — trackpad-style, the same gesture 'pinch' used to be silently
+    ignored for on Windows (no pinch/zoom equivalent on a desktop; see
+    README's "Known gaps"). dx/dy arrive as CSS pixels dragged across the
+    dashboard's own screen image, not device pixels — scaled down here to
+    a handful of Win32 wheel "notches" (WHEEL_DELTA=120 each, capped at 5)
+    so one full-panel drag doesn't fly through pages of content.
+    Direction follows the drag (content tracks the fingers, like a
+    touchscreen) — if it ever feels backwards on real hardware, flip the
+    sign on the affected axis here."""
+    def notches(px):
+        return max(-5, min(5, round(px / 40))) * WHEEL_DELTA
+
+    vy = notches(dy)
+    if vy:
+        mi = MOUSEINPUT(0, 0, vy & 0xFFFFFFFF, MOUSEEVENTF_WHEEL, 0, None)
+        _send(INPUT(INPUT_MOUSE, _INPUTunion(mi=mi)))
+    vx = notches(dx)
+    if vx:
+        mi = MOUSEINPUT(0, 0, vx & 0xFFFFFFFF, MOUSEEVENTF_HWHEEL, 0, None)
+        _send(INPUT(INPUT_MOUSE, _INPUTunion(mi=mi)))
 
 
 def key_press(name, modifiers=None):

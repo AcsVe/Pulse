@@ -99,6 +99,8 @@ class RemoteControl:
                 input_sim.right_click(x, y)
             elif action == 'key' and params.get('key'):
                 input_sim.key_press(params['key'], params.get('modifiers'))
+            elif action == 'scroll' and params.get('dx') is not None and params.get('dy') is not None:
+                input_sim.scroll(params['dx'], params['dy'])
             elif action == 'back':
                 input_sim.key_combo(input_sim.VK_MENU, input_sim.VK_LEFT)       # Alt+Left: back, in browsers/Explorer
             elif action == 'home':

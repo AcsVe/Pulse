@@ -1406,6 +1406,17 @@ function openRemotePanel(id, name) {
       remoteCmd({ action: 'rightclick', x: dx(midX), y: dy(midY) });
       return;
     }
+    // A two-finger drag that's NOT a stationary tap, on Windows, is a
+    // trackpad-style scroll — 'pinch' has no desktop equivalent and used
+    // to just be silently ignored there (see input_sim.py's scroll()).
+    // Android keeps real pinch/zoom below; it has no scroll gesture of
+    // its own here and never reaches this branch (isWindows is false).
+    if (isWindows) {
+      const ddx = ((e0.x - p.s0.x) + (e1.x - p.s1.x)) / 2;
+      const ddy = ((e0.y - p.s0.y) + (e1.y - p.s1.y)) / 2;
+      remoteCmd({ action: 'scroll', dx: Math.round(ddx), dy: Math.round(ddy) });
+      return;
+    }
     remoteCmd({ action: 'pinch', duration: dur, touches: [
       [dx(p.s0.x), dy(p.s0.y), dx(e0.x), dy(e0.y)],
       [dx(p.s1.x), dy(p.s1.y), dx(e1.x), dy(e1.y)],
