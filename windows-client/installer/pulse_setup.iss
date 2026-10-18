@@ -1,0 +1,143 @@
+; Pulse-Setup-Installer.exe — a single Inno Setup installer that replaces
+; the previous manual workflow (unzip, open an elevated prompt, run
+; Pulse-Setup.exe enroll then install by hand). It exists specifically to
+; eliminate the friction hit during real-world testing of that manual
+; workflow:
+;
+;   - A FIXED, permanent install folder ({autopf}\Pulse, DisableDirPage=yes)
+;     so the Windows Service Control Manager's registered binary path can
+;     never go stale from someone moving/reinstalling into a different
+;     folder (see pulse_cli.py's docstring on why that mattered).
+;   - Before copying any files, any already-running PulseHelper.exe is
+;     killed and PulseService is stopped — this is the exact
+;     "folder or a file in it is open in another program" error hit
+;     during manual updates, now handled automatically.
+;   - Windows Defender's scan exclusion for the install folder is added
+;     (and removed again on uninstall) with no separate step or prompt —
+;     "تخطي أو إضافة exclude in MSsecurity بدون أي عناء".
+;   - One wizard page collects the server URL + one-time linking code
+;     (skipped automatically on an upgrade, once pulse.db already exists)
+;     and the installer itself runs "enroll" then "install" — no command
+;     line, no separate steps to get wrong.
+;
+; Built by .github/workflows/build-windows-client.yml, which first builds
+; Pulse-Setup.exe/PulseService/PulseHelper exactly as before, collects them
+; into windows-client\out\, then compiles this script against that folder.
+
+#ifndef SourceDir
+  #define SourceDir "..\out"
+#endif
+
+[Setup]
+AppId={{8B1E1E4E-9F2D-4A3B-8C7A-5E6F7A8B9C0D}
+AppName=Pulse
+AppVersion=1.0
+AppPublisher=RAS/ACS
+AppPublisherURL=https://github.com/AcsVe/Pulse
+DefaultDirName={autopf}\Pulse
+; Fixed install path — never offer a choice, so the service's registered
+; binary path can never end up pointing somewhere that got moved or deleted.
+DisableDirPage=yes
+DefaultGroupName=Pulse
+DisableProgramGroupPage=yes
+PrivilegesRequired=admin
+ArchitecturesInstallIn64BitMode=x64
+OutputDir=.
+OutputBaseFilename=Pulse-Setup-Installer
+SetupIconFile=pulse.ico
+UninstallDisplayIcon={app}\pulse.ico
+Compression=lzma2
+SolidCompression=yes
+WizardStyle=modern
+ArchitecturesAllowed=x64compatible
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Files]
+Source: "{#SourceDir}\Pulse-Setup.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\PulseService\*"; DestDir: "{app}\PulseService"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\PulseHelper\*"; DestDir: "{app}\PulseHelper"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "pulse.ico"; DestDir: "{app}"; Flags: ignoreversion
+
+[Run]
+; Best-effort: exclude the install folder from Windows Defender scanning so
+; the first run of these unsigned executables isn't quarantined/blocked.
+; SilentlyContinue means a managed/locked-down Defender policy just no-ops
+; this instead of failing the install.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Add-MpPreference -ExclusionPath '{app}' -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated; StatusMsg: "Excluding Pulse from Windows Defender scanning..."
+Filename: "{app}\Pulse-Setup.exe"; Parameters: "enroll ""{code:GetServerUrl}"" ""{code:GetCode}"""; Flags: runhidden waituntilterminated; StatusMsg: "Connecting to your Pulse server..."; Check: NeedEnroll
+Filename: "{app}\Pulse-Setup.exe"; Parameters: "install"; Flags: runhidden waituntilterminated; StatusMsg: "Installing the Pulse service..."
+
+[UninstallRun]
+Filename: "{app}\Pulse-Setup.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "PulseUninstall"
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Remove-MpPreference -ExclusionPath '{app}' -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated; RunOnceId: "PulseRemoveExclusion"
+
+[Code]
+var
+  EnrollPage: TInputQueryWizardPage;
+
+function DBExists: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{commonappdata}\Pulse\pulse.db'));
+end;
+
+procedure InitializeWizard;
+begin
+  EnrollPage := CreateInputQueryPage(wpSelectDir,
+    'Connect to your Pulse server', 'Enter the server address and one-time linking code',
+    'Open the dashboard on your server, add this device, and copy the server URL and the code it shows you. ' +
+    'You can skip this if you already ran "enroll" yourself — this step is skipped automatically on an upgrade.');
+  EnrollPage.Add('Server URL (e.g. https://pulse.example.com):', False);
+  EnrollPage.Add('Linking code:', False);
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := False;
+  if (EnrollPage <> nil) and (PageID = EnrollPage.ID) and DBExists then
+    Result := True;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (EnrollPage <> nil) and (CurPageID = EnrollPage.ID) then begin
+    if (Trim(EnrollPage.Values[0]) = '') or (Trim(EnrollPage.Values[1]) = '') then begin
+      MsgBox('Please enter both the server URL and the linking code.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;
+
+function GetServerUrl(Param: string): string;
+begin
+  Result := EnrollPage.Values[0];
+end;
+
+function GetCode(Param: string): string;
+begin
+  Result := EnrollPage.Values[1];
+end;
+
+function NeedEnroll: Boolean;
+begin
+  Result := not DBExists;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if CurStep = ssInstall then begin
+    // Stop anything already running BEFORE we overwrite its files — this is
+    // exactly the "folder or a file in it is open in another program" error
+    // hit during manual updates.
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM PulseHelper.exe /F', '',
+      SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if FileExists(ExpandConstant('{app}\PulseService\PulseService.exe')) then
+      Exec(ExpandConstant('{app}\PulseService\PulseService.exe'), 'stop', '',
+        SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;

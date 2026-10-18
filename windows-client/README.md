@@ -46,7 +46,30 @@ Both PulseService and PulseHelper read/write the same local sqlite file
 under `C:\ProgramData\Pulse\pulse.db` — PulseHelper queues rows into it
 (usage sessions), PulseService is what actually uploads them.
 
-## Setting it up
+## Setting it up — the installer (recommended)
+
+Download `Pulse-Setup-Installer.exe` from the same releases page and run it
+as Administrator. It:
+
+- installs to a fixed folder (`C:\Program Files\Pulse`) so a future
+  update/uninstall can never point at a stale, moved, or deleted path;
+- stops any already-running PulseService/PulseHelper from a previous
+  install before copying new files, so there's no "file is open in another
+  program" error to work around by hand;
+- excludes itself from Windows Defender scanning automatically (and
+  removes that exclusion again on uninstall) — no separate step;
+- asks once, on a single wizard page, for the server URL and the one-time
+  linking code the dashboard shows when you add a device, then runs the
+  `enroll` and `install` steps itself. On an upgrade (re-running the
+  installer once already enrolled) this page is skipped automatically.
+
+To remove everything, use "Add or remove programs" → Pulse → Uninstall, or
+run the installer again and choose uninstall; it stops the service, removes
+the Defender exclusion, and removes the Startup-folder shortcut. As with
+the manual route below, local data under `C:\ProgramData\Pulse` is left in
+place.
+
+## Setting it up — manually (advanced / troubleshooting)
 
 From an elevated (Administrator) Command Prompt, in the folder you
 unzipped `Pulse-Windows-Client.zip` into:
@@ -73,7 +96,14 @@ hand if you want it gone too.
   but this environment has no Windows machine to actually run it on.
   PyInstaller + pywin32 services in particular are known to need small
   per-machine fixes (missing DLL, a hidden import); report back whatever
-  error comes up on first install/start.
+  error comes up on first install/start. The installer itself is likewise
+  unsigned (see below) and has not yet been run on real hardware either —
+  report back exactly what the enroll/install wizard page shows if
+  anything goes wrong.
+- **No license activation yet** — binding the installer to a
+  per-device license key (device fingerprint → sent to the developer →
+  signed activation key entered once) is planned but not built into this
+  installer yet.
 - **Per-app network usage** isn't available — only a device-wide total.
   CPU%, RAM, connection type (Wi-Fi/Ethernet) and link/current network
   speed ARE reported (see `pulse_agent/sysstats.py` and

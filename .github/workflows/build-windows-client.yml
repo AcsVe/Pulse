@@ -92,10 +92,32 @@ jobs:
         run: Compress-Archive -Path out\* -DestinationPath Pulse-Windows-Client.zip
         shell: pwsh
 
+      # The actual recommended install path from here on: a single Inno
+      # Setup installer that stops any running old version, installs to a
+      # fixed folder, excludes itself from Windows Defender, and runs the
+      # enroll+install steps itself from a one-page wizard — see
+      # windows-client/installer/pulse_setup.iss for why each piece exists.
+      # windows-latest runners don't ship Inno Setup, so install it via
+      # Chocolatey (already present on the runner image).
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Pulse-Setup-Installer.exe
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            "/DSourceDir=$PWD\windows-client\out" `
+            "windows-client\installer\pulse_setup.iss"
+
       - uses: actions/upload-artifact@v4
         with:
           name: Pulse-Windows-Client
           path: windows-client/Pulse-Windows-Client.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pulse-Setup-Installer
+          path: windows-client/installer/Pulse-Setup-Installer.exe
 
       - name: Publish release (stable download link)
         shell: bash
@@ -103,7 +125,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete windows-client-latest --cleanup-tag --yes || true
-          gh release create windows-client-latest windows-client/Pulse-Windows-Client.zip \
+          gh release create windows-client-latest \
+            windows-client/Pulse-Windows-Client.zip \
+            windows-client/installer/Pulse-Setup-Installer.exe \
             --title "Pulse Windows client" \
-            --notes "Standalone Windows client — Pulse-Setup.exe plus the PulseService/ and PulseHelper/ folders. Built from ${GITHUB_SHA::7}. Unzip, keeping all three together, then from an elevated prompt: Pulse-Setup.exe enroll <serverUrl> <code>, then Pulse-Setup.exe install." \
+            --notes "Recommended: download Pulse-Setup-Installer.exe and run it as Administrator — it stops any old version, installs to a fixed folder, excludes itself from Windows Defender, and asks once for the server URL + linking code (skipped automatically on an upgrade). Built from ${GITHUB_SHA::7}. The Pulse-Windows-Client.zip (Pulse-Setup.exe + PulseService/ + PulseHelper/) remains available for manual installs: Pulse-Setup.exe enroll <serverUrl> <code>, then Pulse-Setup.exe install." \
             --latest
