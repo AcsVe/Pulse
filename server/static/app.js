@@ -1254,8 +1254,30 @@ function openRemotePanel(id, name) {
   const startDrag = (clientX, clientY) => {
     const r = img.getBoundingClientRect();
     RC.drag = { x: clientX - r.left, y: clientY - r.top, w: r.width, h: r.height, t: Date.now() };
+    RC.longPressFired = false;
+    // Fired on a timer, NOT on touchend/mouseup: #rcImg's own src gets
+    // replaced every ~300ms by tickRemoteFrame's polling, and on a phone
+    // that mid-gesture image swap reliably fires touchcancel instead of
+    // touchend once the hold crosses a frame refresh — which a >=500ms
+    // right-click press always does. Waiting for touchend meant the press
+    // simply vanished with no right-click, no tap, nothing. A timer fires
+    // independently of whether the touch sequence later completes normally.
+    if (isWindows) {
+      clearTimeout(RC.longPressTimer);
+      RC.longPressTimer = setTimeout(() => {
+        if (!RC.drag) return; // already released/moved/pinched away
+        const toDevX = px => Math.round((px / RC.drag.w) * (RC.w || img.naturalWidth || 1080));
+        const toDevY = px => Math.round((px / RC.drag.h) * (RC.h || img.naturalHeight || 1920));
+        tapFx(RC.drag.x, RC.drag.y);
+        remoteCmd({ action: 'rightclick', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y) });
+        RC.longPressFired = true;
+        RC.drag = null;
+      }, 500);
+    }
   };
   const endDrag = (clientX, clientY) => {
+    clearTimeout(RC.longPressTimer);
+    if (RC.longPressFired) { RC.longPressFired = false; return; } // already handled by the timer above
     if (!RC.drag) return;
     const r = img.getBoundingClientRect();
     const x2 = clientX - r.left, y2 = clientY - r.top;
@@ -1265,19 +1287,13 @@ function openRemotePanel(id, name) {
     if (Math.hypot(dx, dy) < 12) {
       tapFx(RC.drag.x, RC.drag.y);
       const heldMs = Date.now() - RC.drag.t;
-      // On Windows there's no equivalent to Android's own long-press context
-      // menu gesture — so a press held at least half a second without
-      // moving (the remoteRightClickHint's own threshold) is a real
-      // right-click instead, same mapping a phone's own OS uses.
-      if (isWindows && heldMs >= 500) {
-        remoteCmd({ action: 'rightclick', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y) });
-      } else {
-        // Forwarding how long the admin actually held it down (not always a
-        // fixed quick tap) is what makes a press-and-hold register on the
-        // phone as a real long-press — opening a context menu, starting an
-        // icon drag, etc. — instead of every hold just being a fast tap.
-        remoteCmd({ action: 'tap', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y), duration: heldMs });
-      }
+      // Forwarding how long the admin actually held it down (not always a
+      // fixed quick tap) is what makes a press-and-hold register on the
+      // phone as a real long-press — opening a context menu, starting an
+      // icon drag, etc. — instead of every hold just being a fast tap. (On
+      // Windows, a long-enough hold never reaches here at all — the timer
+      // above already turned it into a right-click.)
+      remoteCmd({ action: 'tap', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y), duration: heldMs });
     } else {
       tapFx(x2, y2);
       // A home-screen page swipe is a FLING, not just any drag: launchers
@@ -1303,6 +1319,13 @@ function openRemotePanel(id, name) {
   };
   img.onmousedown = e => { e.preventDefault(); startDrag(e.clientX, e.clientY); };
   img.onmouseup = e => endDrag(e.clientX, e.clientY);
+  img.onmousemove = e => {
+    if (!RC.drag) return;
+    const r = img.getBoundingClientRect();
+    const dx = (e.clientX - r.left) - RC.drag.x, dy = (e.clientY - r.top) - RC.drag.y;
+    if (Math.hypot(dx, dy) >= 12) clearTimeout(RC.longPressTimer);
+  };
+  img.onmouseleave = () => { clearTimeout(RC.longPressTimer); };
   // Two-finger gesture (pinch zoom, or a two-finger pan/scroll) relayed to
   // the phone as two concurrent moving touches — what the phone actually
   // does with it (zoom in/out, scroll, select...) depends on whatever app
@@ -1359,7 +1382,16 @@ function openRemotePanel(id, name) {
   };
   img.ontouchmove = e => {
     if (RC.pinch) { e.preventDefault(); trackPinch(e.touches); }
-    else if (RC.drag) { e.preventDefault(); } // block page scroll while swiping
+    else if (RC.drag) {
+      e.preventDefault(); // block page scroll while swiping
+      // Real movement means this is turning into a swipe, not a long-press
+      // — don't let the pending right-click timer fire once it's no longer
+      // a stationary hold.
+      const r = img.getBoundingClientRect();
+      const t = e.touches[0];
+      const dx = (t.clientX - r.left) - RC.drag.x, dy = (t.clientY - r.top) - RC.drag.y;
+      if (Math.hypot(dx, dy) >= 12) clearTimeout(RC.longPressTimer);
+    }
   };
   img.ontouchend = e => {
     e.preventDefault();
@@ -1370,6 +1402,7 @@ function openRemotePanel(id, name) {
     const tt = e.changedTouches[0];
     if (tt) endDrag(tt.clientX, tt.clientY);
   };
+  img.ontouchcancel = () => { clearTimeout(RC.longPressTimer); RC.drag = null; RC.pinch = null; };
   jpost(`/api/devices/${id}/remote/start`, {}, 'POST');
   tickRemoteFrame();
   RC.timer = setInterval(tickRemoteFrame, 300);
