@@ -882,11 +882,21 @@ def create_app(test_config=None):
             return jsonify({'error': 'not_active'}), 400
         data = request.get_json(silent=True) or {}
         action = (data.get('action') or '').strip()
-        if action not in ('tap', 'swipe', 'pinch', 'text', 'back', 'home', 'recents', 'launch', 'close'):
+        # 'rightclick' and 'key' are Windows-client-only (see windows-client/
+        # pulse_agent/remote.py and input_sim.py) — added alongside the
+        # original Android gesture set rather than replacing it, since
+        # Android devices never send either.
+        if action not in ('tap', 'swipe', 'pinch', 'text', 'back', 'home', 'recents', 'launch', 'close',
+                           'rightclick', 'key'):
             return jsonify({'error': 'bad_action'}), 400
         if action in ('launch', 'close') and not (data.get('pkg') or '').strip():
             return jsonify({'error': 'pkg_required'}), 400
-        params = {k: data[k] for k in ('x', 'y', 'x2', 'y2', 'duration', 'text', 'pkg') if k in data}
+        if action == 'key' and not (data.get('key') or '').strip():
+            return jsonify({'error': 'key_required'}), 400
+        params = {k: data[k] for k in ('x', 'y', 'x2', 'y2', 'duration', 'text', 'pkg', 'key', 'modifiers') if k in data}
+        if 'modifiers' in params and not (isinstance(params['modifiers'], list)
+                                           and all(isinstance(m, str) for m in params['modifiers'])):
+            return jsonify({'error': 'bad_modifiers'}), 400
         # 'pinch' (two-finger zoom/pan) carries its two finger paths as a
         # nested list rather than flat x/y keys — validated just enough to
         # keep garbage out of the queue the device polls (a handful of
