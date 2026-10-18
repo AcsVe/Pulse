@@ -73,15 +73,15 @@ class PulseService(win32serviceutil.ServiceFramework):
             return DEFAULT_INTERVAL_S  # not enrolled yet — nothing to sync; just keep idling
         try:
             browser_history.collect()
-        except Exception:
-            servicemanager.LogErrorMsg('Pulse: browser_history.collect() failed')
+        except Exception as e:
+            servicemanager.LogErrorMsg(f'Pulse: browser_history.collect() failed: {e!r}')
         try:
             totals = self.net.delta()
             result = uploader.sync_once(net_totals=totals)
             if isinstance(result, dict) and result.get('pollIntervalS'):
                 return max(10, int(result['pollIntervalS']))
-        except Exception:
-            servicemanager.LogErrorMsg('Pulse: sync_once() failed')
+        except Exception as e:
+            servicemanager.LogErrorMsg(f'Pulse: sync_once() failed: {e!r}')
         return DEFAULT_INTERVAL_S
 
     def main(self):
@@ -93,4 +93,23 @@ class PulseService(win32serviceutil.ServiceFramework):
 
 
 if __name__ == '__main__':
-    win32serviceutil.HandleCommandLine(PulseService)
+    if len(sys.argv) == 1:
+        # Launched by the Service Control Manager itself (no arguments at
+        # all — exactly how SCM starts any service) rather than from a
+        # console. win32serviceutil.HandleCommandLine()'s own detection of
+        # this case is unreliable inside a PyInstaller-frozen exe
+        # specifically — it works fine for `PulseService.exe debug` (a
+        # genuine command-line argument, so HandleCommandLine's explicit
+        # verb handling kicks in and runs fine), but silently fails to ever
+        # call StartServiceCtrlDispatcher for the real no-argument SCM
+        # launch, so the process just sits there and SCM eventually gives
+        # up with "service did not respond" (Windows error 1053) — even
+        # though the exact same code runs perfectly under `debug`. Driving
+        # servicemanager directly sidesteps HandleCommandLine's detection
+        # entirely for this one case; `install`/`start`/`stop`/`remove`/
+        # `debug` all still go through HandleCommandLine as normal.
+        servicemanager.Initialize()
+        servicemanager.PrepareToHostSingle(PulseService)
+        servicemanager.StartServiceCtrlDispatcher()
+    else:
+        win32serviceutil.HandleCommandLine(PulseService)
