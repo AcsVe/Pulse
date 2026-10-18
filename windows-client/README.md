@@ -61,7 +61,11 @@ as Administrator. It:
 - asks once, on a single wizard page, for the server URL and the one-time
   linking code the dashboard shows when you add a device, then runs the
   `enroll` and `install` steps itself. On an upgrade (re-running the
-  installer once already enrolled) this page is skipped automatically.
+  installer once already enrolled) this page is skipped automatically;
+- shows a second wizard page with this device's fingerprint (send it to
+  the developer) and a box to paste an activation key if you already have
+  one — see "Licensing" below. You can leave the key blank and activate
+  later; the service installs either way.
 
 To remove everything, use "Add or remove programs" → Pulse → Uninstall, or
 run the installer again and choose uninstall; it stops the service, removes
@@ -90,6 +94,33 @@ To remove everything: `Pulse-Setup.exe uninstall` (also elevated). Local
 data under `C:\ProgramData\Pulse` is left in place; delete that folder by
 hand if you want it gone too.
 
+## Licensing
+
+This client won't report any data to the dashboard until it's been
+activated with a key signed by the developer — install and enrollment
+still work without one, but `sync_once()` is skipped every cycle (see
+`service_main.py`'s `_cycle()`) until a valid key is on file.
+
+From an elevated prompt, in the install folder:
+
+```
+Pulse-Setup.exe status        # shows the device fingerprint if not yet licensed
+Pulse-Setup.exe fingerprint    # prints just the fingerprint, to send to the developer
+Pulse-Setup.exe license <key>  # activates the key the developer sends back
+```
+
+The installer's second wizard page does the same thing up front (shows the
+fingerprint, takes the key if you already have one). The fingerprint is
+Windows' own per-install identifier — unique per PC, stable across
+reinstalls/updates of this app, but different if Windows itself is
+reinstalled.
+
+This uses the same ECDSA (SECP256R1/SHA-256) scheme as
+`license_key_generator.py`: only the derived **public** key is embedded in
+`pulse_agent/license.py`, so nothing shipped here can forge a key — the
+private key and the generator script itself stay with the developer and
+are never distributed with this client.
+
 ## Known gaps, as of this first build
 
 - **Not yet tested on real Windows hardware** — built and type-checked,
@@ -100,10 +131,6 @@ hand if you want it gone too.
   unsigned (see below) and has not yet been run on real hardware either —
   report back exactly what the enroll/install wizard page shows if
   anything goes wrong.
-- **No license activation yet** — binding the installer to a
-  per-device license key (device fingerprint → sent to the developer →
-  signed activation key entered once) is planned but not built into this
-  installer yet.
 - **Per-app network usage** isn't available — only a device-wide total.
   CPU%, RAM, connection type (Wi-Fi/Ethernet) and link/current network
   speed ARE reported (see `pulse_agent/sysstats.py` and

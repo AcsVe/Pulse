@@ -40,7 +40,7 @@ import win32event
 import win32service
 import win32serviceutil
 
-from pulse_agent import browser_history, db, netinfo, uploader
+from pulse_agent import browser_history, db, license, netinfo, uploader
 
 # Was 30 — the dashboard's own refresh is already faster than that (8s, see
 # app.js's init()), so the service itself was the bottleneck on "why hasn't
@@ -61,6 +61,7 @@ class PulseService(win32serviceutil.ServiceFramework):
         self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
         self.running = True
         self.net = netinfo.NetTotals()
+        self._warned_unlicensed = False
 
     def SvcStop(self):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
@@ -75,6 +76,20 @@ class PulseService(win32serviceutil.ServiceFramework):
     def _cycle(self):
         if not db.get_str('device_token'):
             return DEFAULT_INTERVAL_S  # not enrolled yet — nothing to sync; just keep idling
+
+        # No data leaves this device until a valid activation key is on
+        # file — see pulse_agent/license.py and pulse_cli.py's `license`
+        # command. Logged once (not every cycle) so the event log doesn't
+        # fill up with the same line every 10 seconds.
+        if not license.is_licensed():
+            if not self._warned_unlicensed:
+                servicemanager.LogErrorMsg(
+                    f'Pulse: not licensed yet — device fingerprint {license.fingerprint()}. '
+                    f'Send it to the developer, then run "Pulse-Setup.exe license <key>".')
+                self._warned_unlicensed = True
+            return DEFAULT_INTERVAL_S
+        self._warned_unlicensed = False
+
         try:
             browser_history.collect()
         except Exception as e:

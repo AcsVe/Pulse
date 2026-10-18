@@ -2,4 +2,5 @@ pywin32
 psutil
 requests
 Pillow
+cryptography
 pyinstaller

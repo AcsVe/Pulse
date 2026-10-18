@@ -19,6 +19,14 @@
 ;     (skipped automatically on an upgrade, once pulse.db already exists)
 ;     and the installer itself runs "enroll" then "install" — no command
 ;     line, no separate steps to get wrong.
+;   - A second wizard page shows this device's fingerprint (read directly
+;     from the registry — the exact same value pulse_agent/license.py
+;     reads at runtime) so it can be sent to the developer, and lets an
+;     already-issued activation key be entered right away. See
+;     pulse_agent/license.py's module docstring for the full
+;     fingerprint-then-key round trip this pairs with. The service installs
+;     and enrolls either way — it just won't report any data to the
+;     dashboard until a valid key is on file (enforced in service_main.py).
 ;
 ; Built by .github/workflows/build-windows-client.yml, which first builds
 ; Pulse-Setup.exe/PulseService/PulseHelper exactly as before, collects them
@@ -69,6 +77,7 @@ Source: "pulse.ico"; DestDir: "{app}"; Flags: ignoreversion
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Add-MpPreference -ExclusionPath '{app}' -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated; StatusMsg: "Excluding Pulse from Windows Defender scanning..."
 Filename: "{app}\Pulse-Setup.exe"; Parameters: "enroll ""{code:GetServerUrl}"" ""{code:GetCode}"""; Flags: runhidden waituntilterminated; StatusMsg: "Connecting to your Pulse server..."; Check: NeedEnroll
 Filename: "{app}\Pulse-Setup.exe"; Parameters: "install"; Flags: runhidden waituntilterminated; StatusMsg: "Installing the Pulse service..."
+Filename: "{app}\Pulse-Setup.exe"; Parameters: "license ""{code:GetLicenseKey}"""; Flags: runhidden waituntilterminated; StatusMsg: "Activating your license..."; Check: HasLicenseKey
 
 [UninstallRun]
 Filename: "{app}\Pulse-Setup.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "PulseUninstall"
@@ -77,10 +86,28 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile
 [Code]
 var
   EnrollPage: TInputQueryWizardPage;
+  LicensePage: TInputQueryWizardPage;
 
 function DBExists: Boolean;
 begin
   Result := FileExists(ExpandConstant('{commonappdata}\Pulse\pulse.db'));
+end;
+
+// Windows' own per-install identifier (no admin rights needed to read it).
+// MUST match pulse_agent/license.py's fingerprint() exactly — same
+// registry value, same uppercase-no-dashes formatting — since the
+// developer's license_key_generator.py signs over whatever string is sent
+// to them, and that has to be byte-for-byte what license.py re-derives at
+// verification time.
+function GetMachineFingerprint: string;
+var
+  Guid: string;
+begin
+  Guid := '';
+  if not RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\Cryptography', 'MachineGuid', Guid) then
+    Guid := '';
+  StringChangeEx(Guid, '-', '', True);
+  Result := Uppercase(Guid);
 end;
 
 procedure InitializeWizard;
@@ -91,6 +118,15 @@ begin
     'You can skip this if you already ran "enroll" yourself — this step is skipped automatically on an upgrade.');
   EnrollPage.Add('Server URL (e.g. https://pulse.example.com):', False);
   EnrollPage.Add('Linking code:', False);
+
+  LicensePage := CreateInputQueryPage(EnrollPage.ID,
+    'Device license',
+    'This device''s fingerprint — send it to the developer so they can issue your activation key:',
+    GetMachineFingerprint + #13#10#13#10 +
+    'If you already received a key, paste it below. Otherwise leave this blank — the service will ' +
+    'still install and enroll, but won''t report any data to the dashboard until you activate it later ' +
+    'from an elevated prompt: Pulse-Setup.exe license <key>');
+  LicensePage.Add('Activation key (leave blank to activate later):', False);
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -124,6 +160,16 @@ end;
 function NeedEnroll: Boolean;
 begin
   Result := not DBExists;
+end;
+
+function GetLicenseKey(Param: string): string;
+begin
+  Result := Trim(LicensePage.Values[0]);
+end;
+
+function HasLicenseKey: Boolean;
+begin
+  Result := Trim(LicensePage.Values[0]) <> '';
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

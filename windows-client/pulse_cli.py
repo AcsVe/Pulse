@@ -36,7 +36,7 @@ HERE = os.path.dirname(os.path.abspath(sys.executable)) if getattr(sys, 'frozen'
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from pulse_agent import db, uploader
+from pulse_agent import db, license, uploader
 # PulseService/PulseHelper are built --onedir (a folder, not a single .exe) —
 # see service_main.py's module docstring for why onefile mode is wrong for
 # a service specifically. Pulse-Setup.exe itself stays --onefile; it's a
@@ -142,8 +142,50 @@ def cmd_status(_args):
     except Exception as e:
         print(f'Reachable: no ({e})')
 
+    licensed, state, exp = license.status()
+    if licensed:
+        when = 'never (permanent)' if exp == 'PERMANENT' else exp
+        print(f'License: valid, expires {when}')
+    elif state == 'expired':
+        print(f'License: EXPIRED on {exp} — device fingerprint: {license.fingerprint()} '
+              f'(send this to the developer for a new key, then run "license <key>")')
+    elif state == 'invalid':
+        print(f'License: INVALID key on file — device fingerprint: {license.fingerprint()}')
+    else:
+        print(f'License: not activated — device fingerprint: {license.fingerprint()} '
+              f'(send this to the developer, then run "license <key>")')
 
-COMMANDS = {'enroll': cmd_enroll, 'install': cmd_install, 'uninstall': cmd_uninstall, 'status': cmd_status}
+
+def cmd_fingerprint(_args):
+    print(license.fingerprint())
+
+
+def cmd_license(args):
+    if len(args) != 1:
+        print('Usage: Pulse-Setup.exe license <key>')
+        sys.exit(1)
+    ok, exp, err = license.activate(args[0])
+    if err and err != 'EXPIRED':
+        print({
+            'bad_format': 'That key is not in the right format.',
+            'bad_encoding': "That key's signature couldn't be decoded.",
+            'invalid_signature': "That key doesn't match this device's fingerprint "
+                                  f'({license.fingerprint()}) — check it was issued for this exact PC.',
+            'bad_expiration': 'That key has a malformed expiration date.',
+        }.get(err, f'Invalid license key ({err}).'))
+        sys.exit(1)
+    if err == 'EXPIRED':
+        print(f'License saved, but it already expired on {exp}. Send the fingerprint below to the '
+              f'developer for a new key: {license.fingerprint()}')
+        sys.exit(1)
+    when = 'permanent — never expires' if exp == 'PERMANENT' else f'valid until {exp}'
+    print(f'License activated ({when}). The service will start reporting data on its next cycle.')
+
+
+COMMANDS = {
+    'enroll': cmd_enroll, 'install': cmd_install, 'uninstall': cmd_uninstall, 'status': cmd_status,
+    'fingerprint': cmd_fingerprint, 'license': cmd_license,
+}
 
 
 def main():
