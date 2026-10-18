@@ -278,6 +278,10 @@ body.kiosk svg text{fill:#bcd0de}
 .rcicon.sm{width:30px;height:30px;font-size:.85rem;flex:none}
 .rcicon.danger{color:#ffb4a8}
 .rcicon.danger:hover{background:rgba(214,69,69,.35)}
+/* Armed state for the right-click toggle (🖱️) — stays visibly lit until
+   the next tap consumes it, so it's clear the next tap on the image won't
+   be an ordinary click. */
+.rcicon.on{background:var(--teal);border-color:var(--teal);color:#07211e}
 .remote-text{display:flex;gap:8px;margin-top:10px}
 .remote-text input{flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff}
 /* #rcSendText is a plain .tbtn — a light-theme white button with a pale
