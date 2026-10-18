@@ -25,11 +25,18 @@ import os
 import subprocess
 import sys
 
+# A frozen --onefile exe's __file__ resolves into a throwaway temp
+# extraction folder (sys._MEIxxxxx), not the folder the .exe actually sits
+# in — the exact same PyInstaller onefile pitfall server/app.py's
+# RESOURCE_DIR/DATA_DIR comment already covers for the server .exe.
+# sys.executable's directory is the stable one: where Pulse-Setup.exe,
+# PulseService.exe and PulseHelper.exe actually live side by side.
+HERE = os.path.dirname(os.path.abspath(sys.executable)) if getattr(sys, 'frozen', False) \
+    else os.path.dirname(os.path.abspath(__file__))
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pulse_agent import db, uploader
-
-HERE = os.path.dirname(os.path.abspath(__file__))
 SERVICE_EXE = os.path.join(HERE, 'PulseService.exe')
 HELPER_EXE = os.path.join(HERE, 'PulseHelper.exe')
 USERS_SID = 'S-1-5-32-545'
