@@ -21,10 +21,10 @@
 ;     line, no separate steps to get wrong.
 ;   - A second wizard page shows this device's fingerprint (read directly
 ;     from the registry — the exact same value pulse_agent/license.py
-;     reads at runtime) in a real, read-only edit box (auto-selected, so
-;     Ctrl+C alone copies it — the plain description text a first version
-;     of this page used turned out not to be selectable at all), and lets
-;     an already-issued activation key be entered right away. See
+;     reads at runtime) in a real, read-only edit box (Ctrl+A then Ctrl+C
+;     copies it — the plain description text a first version of this page
+;     used turned out not to be selectable at all), and lets an
+;     already-issued activation key be entered right away. See
 ;     pulse_agent/license.py's module docstring for the full
 ;     fingerprint-then-key round trip this pairs with. The service installs
 ;     and enrolls either way — it just won't report any data to the
@@ -157,7 +157,16 @@ begin
 
   with TNewStaticText.Create(LicensePage) do begin
     Parent := LicensePage.Surface;
-    Top := FingerprintEdit.Top + FingerprintEdit.Height + ScaleY(20);
+    Top := FingerprintEdit.Top + FingerprintEdit.Height + ScaleY(4);
+    Left := 0;
+    Caption := 'Click the code above, press Ctrl+A then Ctrl+C to copy it.';
+    AutoSize := True;
+    Font.Style := [fsItalic];
+  end;
+
+  with TNewStaticText.Create(LicensePage) do begin
+    Parent := LicensePage.Surface;
+    Top := FingerprintEdit.Top + FingerprintEdit.Height + ScaleY(26);
     Left := 0;
     Caption := 'Already have a key from the developer? Paste it below — otherwise leave it blank ' +
       'and activate later (the service still installs and enrolls either way):';
@@ -168,19 +177,9 @@ begin
 
   LicenseKeyEdit := TNewEdit.Create(LicensePage);
   LicenseKeyEdit.Parent := LicensePage.Surface;
-  LicenseKeyEdit.Top := FingerprintEdit.Top + FingerprintEdit.Height + ScaleY(56);
+  LicenseKeyEdit.Top := FingerprintEdit.Top + FingerprintEdit.Height + ScaleY(62);
   LicenseKeyEdit.Left := 0;
   LicenseKeyEdit.Width := LicensePage.SurfaceWidth;
-end;
-
-// Selecting the fingerprint the instant this page is shown means Ctrl+C
-// alone copies it — no click-drag needed at all.
-procedure CurPageChanged(CurPageID: Integer);
-begin
-  if (LicensePage <> nil) and (CurPageID = LicensePage.ID) then begin
-    FingerprintEdit.SetFocus;
-    FingerprintEdit.SelectAll;
-  end;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
