@@ -1319,13 +1319,28 @@ function openRemotePanel(id, name) {
   };
   img.onmousedown = e => { e.preventDefault(); startDrag(e.clientX, e.clientY); };
   img.onmouseup = e => endDrag(e.clientX, e.clientY);
+  // A real finger (or a mouse hand) can't hold perfectly still for 500ms —
+  // small jitter is normal and shouldn't itself cancel the right-click
+  // timer, only an actual drag should. 12px is right for the much shorter
+  // tap/swipe decision at touchend, but was cancelling the long-press timer
+  // on ordinary tremor well before the hold finished.
+  const LONGPRESS_CANCEL_PX = 24;
   img.onmousemove = e => {
     if (!RC.drag) return;
     const r = img.getBoundingClientRect();
     const dx = (e.clientX - r.left) - RC.drag.x, dy = (e.clientY - r.top) - RC.drag.y;
-    if (Math.hypot(dx, dy) >= 12) clearTimeout(RC.longPressTimer);
+    if (Math.hypot(dx, dy) >= LONGPRESS_CANCEL_PX) clearTimeout(RC.longPressTimer);
   };
   img.onmouseleave = () => { clearTimeout(RC.longPressTimer); };
+  // Mobile browsers' own long-press handling on an <img> (Android Chrome's
+  // "Open image"/"Download image" sheet, iOS Safari's callout menu) is a
+  // SEPARATE mechanism from our touch handlers below and fires around the
+  // same ~500ms mark — it can cancel our touch sequence (ontouchcancel)
+  // before our own timer gets a chance to run. touch-action:none (already
+  // set in CSS) stops it swallowing scroll/pan gestures but not this
+  // specific callout; blocking the native contextmenu event and the
+  // iOS-specific callout outright (see app.css) is the actual fix.
+  img.oncontextmenu = e => e.preventDefault();
   // Two-finger gesture (pinch zoom, or a two-finger pan/scroll) relayed to
   // the phone as two concurrent moving touches — what the phone actually
   // does with it (zoom in/out, scroll, select...) depends on whatever app
@@ -1390,7 +1405,7 @@ function openRemotePanel(id, name) {
       const r = img.getBoundingClientRect();
       const t = e.touches[0];
       const dx = (t.clientX - r.left) - RC.drag.x, dy = (t.clientY - r.top) - RC.drag.y;
-      if (Math.hypot(dx, dy) >= 12) clearTimeout(RC.longPressTimer);
+      if (Math.hypot(dx, dy) >= LONGPRESS_CANCEL_PX) clearTimeout(RC.longPressTimer);
     }
   };
   img.ontouchend = e => {

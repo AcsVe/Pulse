@@ -250,7 +250,12 @@ body.kiosk svg text{fill:#bcd0de}
    to the phone correctly while left/right swipes silently did nothing:
    vertical drags weren't competing with any such built-in gesture here,
    horizontal ones were. */
-.remote-screen-wrap img:not([hidden]){max-width:100%;max-height:78vh;display:block;cursor:pointer;user-select:none;-webkit-user-drag:none;transition:transform .15s;transform-origin:center top;touch-action:none}
+/* -webkit-touch-callout:none blocks iOS Safari's own long-press callout
+   (Save/Copy/Share sheet) on this image — a separate mechanism from
+   touch-action, which only governs scroll/pan gestures, not this. Without
+   it, Safari's own long-press handling can win the gesture and cancel ours
+   (touchcancel) before our own right-click timer (app.js) gets to run. */
+.remote-screen-wrap img:not([hidden]){max-width:100%;max-height:78vh;display:block;cursor:pointer;user-select:none;-webkit-user-drag:none;-webkit-touch-callout:none;transition:transform .15s;transform-origin:center top;touch-action:none}
 .remote-warn{background:#4a2f12;color:#ffd79a;border:1px solid #7a5a22;border-radius:8px;padding:8px 12px;font-size:.82rem;margin-bottom:10px}
 .remote-wait{color:#9db6c9;padding:40px 10px;text-align:center;font-size:.88rem}
 /* Sits over the last successfully-loaded frame when the phone has stopped
