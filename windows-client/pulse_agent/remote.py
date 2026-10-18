@@ -20,8 +20,12 @@ from PIL import ImageGrab
 
 from . import input_sim, uploader
 
-FRAME_INTERVAL_S = 0.3
-COMMAND_INTERVAL_S = 0.4
+# Tightened from 0.3/0.4s — the dashboard's own tap-feedback ping already
+# masks most of this, but AnyDesk/TeamViewer-style responsiveness still
+# showed up as noticeably laggier here, and PulseHelper has nothing else
+# competing for its time while a remote session is actually active.
+FRAME_INTERVAL_S = 0.2
+COMMAND_INTERVAL_S = 0.2
 STATE_POLL_IDLE_S = 5
 STATE_POLL_ACTIVE_S = 3
 
@@ -91,6 +95,10 @@ class RemoteControl:
                                 max(80, min(1200, params.get('duration') or 220)))
             elif action == 'text' and params.get('text'):
                 input_sim.type_text(params['text'])
+            elif action == 'rightclick' and x is not None:
+                input_sim.right_click(x, y)
+            elif action == 'key' and params.get('key'):
+                input_sim.key_press(params['key'], params.get('modifiers'))
             elif action == 'back':
                 input_sim.key_combo(input_sim.VK_MENU, input_sim.VK_LEFT)       # Alt+Left: back, in browsers/Explorer
             elif action == 'home':

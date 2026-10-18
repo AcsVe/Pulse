@@ -295,6 +295,39 @@ body.kiosk svg text{fill:#bcd0de}
 .remote-app-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px}
 .remote-app-row:hover{background:rgba(255,255,255,.06)}
 .remote-app-label{flex:1;font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Windows-only on-screen keyboard (⌨ toolbar button, Windows devices only —
+   see isWindows in app.js's openRemotePanel): a hidden always-focused input
+   brings up the phone's own virtual keyboard and forwards every keystroke
+   live, instead of the old "type a whole string, then tap Send" box, which
+   can't do Enter/Backspace/arrows/shortcuts and batches text instead of
+   typing it live into whatever's focused on the PC. */
+.remote-keyboard{margin-top:10px}
+.remote-keyboard.hidden{display:none}
+.remote-keyboard input{width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.06);color:#fff;margin-bottom:8px}
+.rc-keyrow{display:flex;gap:6px;flex-wrap:wrap}
+/* Hamburger + slide-in sidebar nav — replaces the horizontal .tabs strip on
+   narrow screens, where it had to either wrap (eating vertical space on
+   every single screen) or scroll sideways with tabs clipped off at the
+   edge and no visual hint more existed. A sidebar can list every section
+   at once, full labels, no clipping, and doesn't cost any header height. */
+.hamburger{display:none;font-size:1.1rem;padding:8px 12px}
+.sidebar-backdrop{display:none}
+@media (max-width:760px){
+  .hamburger{display:inline-flex}
+  .tabs{display:none}
+  .sidebar-backdrop[hidden],.sidebar[hidden]{display:none}
+  .sidebar-backdrop{position:fixed;inset:0;background:rgba(10,22,36,.5);z-index:85;display:block}
+  .sidebar{position:fixed;inset-inline-start:0;top:0;bottom:0;width:78vw;max-width:300px;
+    background:#fff;z-index:90;box-shadow:4px 0 24px rgba(0,0,0,.3);
+    transform:translateX(-105%);transition:transform .22s ease;
+    display:flex;flex-direction:column;padding:10px 0;overflow-y:auto}
+  html[dir="rtl"] .sidebar{transform:translateX(105%)}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar .tab{display:block;width:100%;text-align:start;padding:14px 20px;
+    border-bottom:1px solid var(--line);border-inline-start:3px solid transparent}
+  .sidebar .tab.on{border-inline-start-color:var(--teal);background:#eaf5f4;color:var(--navy)}
+}
 @media (max-width:760px){
   /* Tabs used to go position:static on mobile (non-sticky) — scrolling down
      any tab meant scrolling all the way back up just to switch tabs or use

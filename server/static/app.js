@@ -83,6 +83,7 @@ const T = {
     remoteLaunch:'فتح', remoteCloseApp:'إغلاق التطبيق',
     remoteCloseHint:'"إغلاق" يُرجع الهاتف للشاشة الرئيسية ثم يوقف العملية الخلفية لذلك التطبيق — يماثل سحبه من قائمة الأخيرة، وليس إغلاقاً قسرياً مضموناً مثل زر النظام (لا تسمح أندرويد لأي تطبيق عادي بذلك).',
     remoteOffline:'لا يمكن التحكم عن بعد بجهاز غير متصل',
+    remoteKeyboard:'لوحة المفاتيح', remoteRightClickHint:'اضغط مطوّلاً (نصف ثانية) للنقر بزر الفأرة الأيمن',
     users:'المستخدمون', addUser:'إضافة مستخدم', username:'اسم المستخدم', password:'كلمة المرور',
     role:'الصلاحية', roleSuperadmin:'مدير كامل', roleAdmin:'مدير', roleViewer:'مشاهد فقط',
     deviceAccess:'الأجهزة المتاحة', active:'نشِط', inactive:'موقوف', resetPassword:'كلمة مرور جديدة',
@@ -158,6 +159,7 @@ const T = {
     remoteLaunch:'Open', remoteCloseApp:'Close app',
     remoteCloseHint:'"Close" sends the phone home then kills that app\'s background process — the same as swiping it off Recents, not a guaranteed force-stop like the system Settings button (no normal app is allowed to do that on Android).',
     remoteOffline:"Can't remote-control an offline device",
+    remoteKeyboard:'Keyboard', remoteRightClickHint:'Press and hold (half a second) for a right-click',
     users:'Users', addUser:'Add user', username:'Username', password:'Password',
     role:'Role', roleSuperadmin:'Full admin', roleAdmin:'Admin', roleViewer:'Viewer only',
     deviceAccess:'Device access', active:'Active', inactive:'Inactive', resetPassword:'Reset password',
@@ -1090,13 +1092,19 @@ const RC = { id: null, timer: null, w: 0, h: 0, drag: null };
 function openRemotePanel(id, name) {
   RC.id = id; RC.w = 0; RC.h = 0; RC.drag = null; RC.apps = null; RC.appsTries = 0;
   const dev = (S.allDevices || []).find(x => String(x.id) === String(id));
+  // Windows devices get a real right-click (long-press on the image) and a
+  // live keyboard instead of Android's "apps list"/app-close controls,
+  // which have no Windows equivalent — detected off the free-text osVersion
+  // the client reports at enroll ("Windows 10 (10.0.19045)"), since there's
+  // no dedicated platform field on the device record.
+  const isWindows = !!(dev && dev.osVersion && /windows/i.test(dev.osVersion));
   const modal = $('#remoteModal');
   modal.innerHTML = `
     <div class="remote-box">
       <div class="remote-head">
         <h3>${esc(t('remote'))} — ${esc(name)}</h3>
         <div class="remote-head-actions">
-          <button class="rcicon" id="rcAppsBtn" title="${esc(t('remoteApps'))}">⊞</button>
+          ${!isWindows ? `<button class="rcicon" id="rcAppsBtn" title="${esc(t('remoteApps'))}">⊞</button>` : ''}
           <button class="rcicon" id="rcFull" title="${esc(t('remoteFullscreen'))}">⛶</button>
           <button class="rcicon" id="rcClose" title="${esc(t('remoteClose'))}">✕</button>
         </div>
@@ -1108,11 +1116,11 @@ function openRemotePanel(id, name) {
         <img id="rcImg" hidden>
         <div class="remote-stale hidden" id="rcStale">${esc(t('remoteStale'))}</div>
       </div>
-      <div class="remote-apps-panel hidden" id="rcAppsPanel">
+      ${!isWindows ? `<div class="remote-apps-panel hidden" id="rcAppsPanel">
         <input id="rcAppsSearch" placeholder="${esc(t('remoteAppsSearch'))}">
         <div class="remote-apps-list" id="rcAppsList"><div class="remote-apps-msg">${esc(t('remoteAppsLoading'))}</div></div>
         <div class="remote-hint">${esc(t('remoteCloseHint'))}</div>
-      </div>
+      </div>` : ''}
       <div class="remote-toolbar">
         <button class="rcicon" id="rcZoomOut" title="${esc(t('remoteZoomOut'))}">－</button>
         <button class="rcicon" id="rcZoomIn" title="${esc(t('remoteZoomIn'))}">＋</button>
@@ -1120,14 +1128,41 @@ function openRemotePanel(id, name) {
         <button class="rcicon" id="rcBack" title="${esc(t('remoteBack'))}">⟲</button>
         <button class="rcicon" id="rcHome" title="${esc(t('remoteHome'))}">⌂</button>
         <button class="rcicon" id="rcRecents" title="${esc(t('remoteRecents'))}">▭</button>
+        ${isWindows ? `<span class="rcsep"></span><button class="rcicon" id="rcKbBtn" title="${esc(t('remoteKeyboard'))}">⌨</button>` : ''}
       </div>
-      <div class="remote-text">
+      ${isWindows ? `<div class="remote-keyboard hidden" id="rcKeyboard">
+        <input id="rcKeyCapture" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(t('remoteTextPh'))}">
+        <div class="rc-keyrow">
+          <button class="rcicon sm" data-key="escape">Esc</button>
+          <button class="rcicon sm" data-key="tab">Tab</button>
+          <button class="rcicon sm" data-key="backspace">⌫</button>
+          <button class="rcicon sm" data-key="enter">⏎</button>
+          <button class="rcicon sm" data-key="win">⊞</button>
+          <button class="rcicon sm" data-key="up">↑</button>
+          <button class="rcicon sm" data-key="down">↓</button>
+          <button class="rcicon sm" data-key="left">←</button>
+          <button class="rcicon sm" data-key="right">→</button>
+        </div>
+      </div>` : `<div class="remote-text">
         <input id="rcText" placeholder="${esc(t('remoteTextPh'))}">
         <button class="tbtn" id="rcSendText">${esc(t('remoteSendText'))}</button>
-      </div>
-      <div class="remote-hint">${esc(t('remoteHint'))}</div>
+      </div>`}
+      <div class="remote-hint">${esc(t('remoteHint'))}${isWindows ? ' — ' + esc(t('remoteRightClickHint')) : ''}</div>
     </div>`;
   modal.hidden = false;
+  // Rotating the screen to landscape makes a much better use of a phone's
+  // width while actually working on a PC (the whole point of this card) —
+  // most mobile browsers only honor an orientation lock request while in
+  // fullscreen, so fullscreen is requested first and the lock piggybacks on
+  // it; browsers/devices that support neither just silently keep whatever
+  // orientation the phone is already in.
+  RC.orientLocked = false;
+  if (window.innerWidth <= 760 && screen.orientation && screen.orientation.lock) {
+    const tryLock = () => { screen.orientation.lock('landscape').then(() => { RC.orientLocked = true; }).catch(() => {}); };
+    const box = $('.remote-box');
+    if (box && box.requestFullscreen) box.requestFullscreen().then(tryLock).catch(tryLock);
+    else tryLock();
+  }
   RC.zoom = 1;
   const img0 = $('#rcImg');
   $('#rcZoomIn').onclick = () => { RC.zoom = Math.min(2.5, RC.zoom + 0.25); img0.style.transform = `scale(${RC.zoom})`; };
@@ -1137,16 +1172,50 @@ function openRemotePanel(id, name) {
   $('#rcBack').onclick = () => remoteCmd({ action: 'back' });
   $('#rcHome').onclick = () => remoteCmd({ action: 'home' });
   $('#rcRecents').onclick = () => remoteCmd({ action: 'recents' });
-  $('#rcAppsBtn').onclick = () => {
-    const panel = $('#rcAppsPanel');
-    panel.classList.toggle('hidden');
-    if (!panel.classList.contains('hidden')) loadRemoteApps();
-  };
-  $('#rcAppsSearch').oninput = () => renderRemoteApps();
-  $('#rcSendText').onclick = () => {
-    const v = $('#rcText').value; if (!v) return;
-    remoteCmd({ action: 'text', text: v }); $('#rcText').value = '';
-  };
+  if (!isWindows) {
+    $('#rcAppsBtn').onclick = () => {
+      const panel = $('#rcAppsPanel');
+      panel.classList.toggle('hidden');
+      if (!panel.classList.contains('hidden')) loadRemoteApps();
+    };
+    $('#rcAppsSearch').oninput = () => renderRemoteApps();
+    $('#rcSendText').onclick = () => {
+      const v = $('#rcText').value; if (!v) return;
+      remoteCmd({ action: 'text', text: v }); $('#rcText').value = '';
+    };
+  } else {
+    // Live keyboard: a hidden, always-focused input. Printable characters
+    // (including whatever the phone's own on-screen keyboard produces,
+    // which doesn't reliably fire keydown events at all — this is the
+    // standard way to capture it regardless) are picked up via `input` and
+    // forwarded as they're typed, not batched until a Send button is
+    // pressed. Keys with no character of their own (Enter, Backspace,
+    // arrows, Escape…) and any Ctrl/Alt combo are caught in `keydown`
+    // instead and sent as named 'key' commands — see input_sim.key_press().
+    const kb = $('#rcKeyboard'), cap = $('#rcKeyCapture');
+    $('#rcKbBtn').onclick = () => {
+      kb.classList.toggle('hidden');
+      if (!kb.classList.contains('hidden')) { cap.value = ''; cap.focus(); }
+    };
+    const mods = e => { const m = []; if (e.ctrlKey) m.push('ctrl'); if (e.altKey) m.push('alt'); if (e.shiftKey) m.push('shift'); return m; };
+    const NAMED = { Escape: 'escape', Tab: 'tab', Backspace: 'backspace', Enter: 'enter',
+                     ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Delete: 'delete' };
+    cap.addEventListener('keydown', e => {
+      if (NAMED[e.key]) {
+        e.preventDefault();
+        remoteCmd({ action: 'key', key: NAMED[e.key], modifiers: mods(e) });
+        cap.value = '';
+      } else if ((e.ctrlKey || e.altKey) && e.key.length === 1) {
+        e.preventDefault();
+        remoteCmd({ action: 'key', key: e.key, modifiers: mods(e) });
+      }
+    });
+    cap.addEventListener('input', () => {
+      const v = cap.value;
+      if (v) { remoteCmd({ action: 'text', text: v }); cap.value = ''; }
+    });
+    kb.querySelectorAll('[data-key]').forEach(b => b.onclick = () => { remoteCmd({ action: 'key', key: b.dataset.key }); cap.focus(); });
+  }
   const img = $('#rcImg');
   RC.failStreak = 0; RC.metaTick = 0; RC.lastFrameAt = null;
   img.onload = () => {
@@ -1195,11 +1264,20 @@ function openRemotePanel(id, name) {
     const toDevY = px => Math.round((px / RC.drag.h) * (RC.h || img.naturalHeight || 1920));
     if (Math.hypot(dx, dy) < 12) {
       tapFx(RC.drag.x, RC.drag.y);
-      // Forwarding how long the admin actually held it down (not always a
-      // fixed quick tap) is what makes a press-and-hold register on the
-      // phone as a real long-press — opening a context menu, starting an
-      // icon drag, etc. — instead of every hold just being a fast tap.
-      remoteCmd({ action: 'tap', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y), duration: Date.now() - RC.drag.t });
+      const heldMs = Date.now() - RC.drag.t;
+      // On Windows there's no equivalent to Android's own long-press context
+      // menu gesture — so a press held at least half a second without
+      // moving (the remoteRightClickHint's own threshold) is a real
+      // right-click instead, same mapping a phone's own OS uses.
+      if (isWindows && heldMs >= 500) {
+        remoteCmd({ action: 'rightclick', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y) });
+      } else {
+        // Forwarding how long the admin actually held it down (not always a
+        // fixed quick tap) is what makes a press-and-hold register on the
+        // phone as a real long-press — opening a context menu, starting an
+        // icon drag, etc. — instead of every hold just being a fast tap.
+        remoteCmd({ action: 'tap', x: toDevX(RC.drag.x), y: toDevY(RC.drag.y), duration: heldMs });
+      }
     } else {
       tapFx(x2, y2);
       // A home-screen page swipe is a FLING, not just any drag: launchers
@@ -1387,6 +1465,8 @@ function closeRemotePanel() {
   RC.id = null; RC.timer = null;
   $('#remoteModal').hidden = true;
   $('#remoteModal').innerHTML = '';
+  try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {}
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
 
 // ── chrome: chips, device popover, tabs ───────────────────────────────────
@@ -1422,19 +1502,39 @@ document.addEventListener('keydown', e => {
   const pop = $('#devPop');
   if (pop && pop.open && e.key === 'Escape') pop.open = false;
 });
+const TAB_LABELS = { devices: 'devices', data: 'dataUsage', settings: 'settings', users: 'users' };
 function renderTabs() {
   const tb = $('#tabs'); if (!tb) return;
-  const tabLabel = { devices: 'devices', data: 'dataUsage', settings: 'settings', users: 'users' };
   const vis = visibleTabs();
   if (!vis.some(([k]) => k === S.tab)) S.tab = 'overview';
-  tb.innerHTML = vis.map(([k]) => `<button class="tab ${S.tab === k ? 'on' : ''}" data-t="${k}">${t(tabLabel[k] || k)}</button>`).join('');
-  tb.querySelectorAll('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.t; renderTabs(); load(); });
+  tb.innerHTML = vis.map(([k]) => `<button class="tab ${S.tab === k ? 'on' : ''}" data-t="${k}">${t(TAB_LABELS[k] || k)}</button>`).join('');
+  tb.querySelectorAll('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.t; renderTabs(); renderSidebar(); load(); });
+}
+// Mobile sidebar nav: the same section list as .tabs, but as a slide-in
+// drawer instead of a horizontal strip — see app.css's @media(max-width:760px)
+// for why (tabs either wrapped onto their own row on every screen, or
+// scrolled sideways with later ones clipped off and no hint more existed).
+function renderSidebar() {
+  const sb = $('#sidebar'); if (!sb) return;
+  const vis = visibleTabs();
+  sb.innerHTML = vis.map(([k]) => `<button class="tab ${S.tab === k ? 'on' : ''}" data-t="${k}">${t(TAB_LABELS[k] || k)}</button>`).join('');
+  sb.querySelectorAll('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.t; closeSidebar(); renderTabs(); renderSidebar(); load(); });
+}
+function openSidebar() {
+  const sb = $('#sidebar'), bd = $('#sidebarBackdrop'); if (!sb || !bd) return;
+  sb.hidden = false; bd.hidden = false;
+  requestAnimationFrame(() => sb.classList.add('open'));
+}
+function closeSidebar() {
+  const sb = $('#sidebar'), bd = $('#sidebarBackdrop'); if (!sb || !bd) return;
+  sb.classList.remove('open');
+  setTimeout(() => { sb.hidden = true; bd.hidden = true; }, 220);
 }
 function paintStatic() {
   $('#langBtn').textContent = t('lang'); $('#refreshBtn').textContent = t('refresh');
   $('#exportPdfBtn').textContent = t('exportPdf');
   const lo = $('#logoutBtn'); if (lo) lo.textContent = t('logout');
-  renderChips(); renderTabs(); renderDevPop();
+  renderChips(); renderTabs(); renderSidebar(); renderDevPop();
   watchStickyOffsets();
 }
 // .top (the navy header bar) wraps onto a second line once its buttons
@@ -1510,6 +1610,9 @@ async function init() {
   try { S.allDevices = await api('/api/devices?' + (K.key ? 'key=' + encodeURIComponent(K.key) : '')); } catch (e) { S.allDevices = []; }
   $('#langBtn').onclick = () => { setLang(lang === 'ar' ? 'en' : 'ar'); paintStatic(); load(); };
   $('#refreshBtn').onclick = load;
+  const menuBtn = $('#menuBtn'), sidebarBackdrop = $('#sidebarBackdrop');
+  if (menuBtn) menuBtn.onclick = () => { if ($('#sidebar').classList.contains('open')) closeSidebar(); else openSidebar(); };
+  if (sidebarBackdrop) sidebarBackdrop.onclick = closeSidebar;
   $('#exportPdfBtn').onclick = () => window.open('/report/print?' + qs(), '_blank');
   const fd = $('#fromDate'), td = $('#toDate');
   // datetime-local values ("YYYY-MM-DDTHH:mm") parse directly — the user

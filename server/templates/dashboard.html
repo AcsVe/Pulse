@@ -18,6 +18,7 @@
 </head>
 <body class="{{ 'kiosk' if kiosk else '' }}">
 <header class="top">
+  {% if not kiosk %}<button class="btn hamburger" id="menuBtn" aria-label="Menu">☰</button>{% endif %}
   <div class="brand">Pul<span>se</span></div>
   <div class="controls" id="controls">
     <div class="chips" id="periodChips"></div>
@@ -32,7 +33,9 @@
   </div>
   <div class="kioskinfo" id="kioskInfo"></div>
 </header>
-{% if not kiosk %}<nav class="tabs" id="tabs"></nav>{% endif %}
+{% if not kiosk %}<nav class="tabs" id="tabs"></nav>
+<div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
+<nav class="sidebar" id="sidebar" hidden></nav>{% endif %}
 <main id="main"></main>
 <div class="toast" id="toast"></div>
 <div class="modal-wrap" id="remoteModal" hidden></div>

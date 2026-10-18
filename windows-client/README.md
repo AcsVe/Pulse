@@ -81,7 +81,12 @@ hand if you want it gone too.
 - **Remote control's `pinch`/zoom action** has no desktop equivalent and
   is ignored; `tap`/`swipe`/`text`/`back`/`home`/`recents`/`launch`/`close`
   all work, mapped to the closest Windows equivalent (e.g. `home` → Win+D,
-  `recents` → Win+Tab).
+  `recents` → Win+Tab). A press-and-hold (≥0.5s) on the remote screen sends
+  a real right-click (`rightclick`), and the dashboard's ⌨ button (shown
+  only for Windows devices) opens a live keyboard — typed characters and
+  named keys (Enter/Backspace/Tab/Escape/arrows/Win, plus Ctrl/Alt combos)
+  go through as `key` commands instead of the old batch-a-string-then-send
+  box, which couldn't do either.
 - **Unsigned executables**: Windows SmartScreen or antivirus software may
   flag first-run of an unsigned `.exe` downloaded from the internet — same
   situation the Android APK and server `.exe` are already in.

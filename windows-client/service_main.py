@@ -42,7 +42,11 @@ import win32serviceutil
 
 from pulse_agent import browser_history, db, netinfo, uploader
 
-DEFAULT_INTERVAL_S = 30
+# Was 30 — the dashboard's own refresh is already faster than that (8s, see
+# app.js's init()), so the service itself was the bottleneck on "why hasn't
+# this number updated yet". The server can still slow a device back down via
+# sync_once()'s pollIntervalS if that ever matters.
+DEFAULT_INTERVAL_S = 10
 
 
 class PulseService(win32serviceutil.ServiceFramework):
