@@ -33,6 +33,16 @@ Deploy to Render with `server/render.yaml` (Blueprint deploy), or anywhere that
 runs `gunicorn app:app`. Set `DATABASE_URL` to a Postgres connection string in
 production (SQLite is the local-dev default).
 
+**Windows, without installing Python:** the "Build Pulse Server (Windows .exe)"
+GitHub Actions workflow packages the server into a standalone
+`Pulse-Server.exe` with PyInstaller — trigger it from Actions (works fine
+from a phone's browser) and download the result from
+`https://github.com/<owner>/<repo>/releases/latest/download/Pulse-Server.exe`.
+Put it in its own folder and double-click it; it listens on port 5000 and
+creates `pulse.db`/`instance/` next to itself, which persist across restarts.
+Rebuild (re-run the workflow, re-download) after any server code change —
+it does not auto-update itself.
+
 Environment variables:
 
 | Variable | Purpose |

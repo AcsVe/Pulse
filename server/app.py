@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+import sys
 from datetime import datetime, timedelta
 from functools import wraps
 from urllib.parse import urlparse
@@ -15,6 +16,30 @@ import stats
 import mailer
 from models import (db, now_ms, sha256, Device, UsageSession, NetEvent, BrowseEvent,
                     DataUsage, DeviceSample, AppLabelOverride, EmailSettings, ReportSchedule, RemoteCommand, User)
+
+# Two different "where am I" questions, both only interesting when this is
+# running as a PyInstaller-built standalone .exe rather than `python app.py`:
+#
+# RESOURCE_DIR — where the bundled, READ-ONLY templates/ and static/ folders
+# live. PyInstaller's --onefile mode unpacks everything named in --add-data
+# into a throwaway temp directory on every launch (sys._MEIPASS), which is
+# NOT where the .exe itself sits — os.path.dirname(__file__) would silently
+# resolve inside that temp dir and still work, right up until something
+# tries to treat it as a stable path.
+#
+# DATA_DIR — where pulse.db and the captured-screen files should actually
+# live: next to the .exe itself (sys.executable's own folder), so they
+# persist across runs/restarts. Using __file__ here (as a plain `python
+# app.py` run correctly does) would instead point inside that same
+# wiped-on-every-launch temp directory under a frozen .exe — every restart
+# would find an empty database, with no error, just silently "lost" all
+# devices and history each time.
+if getattr(sys, 'frozen', False):
+    RESOURCE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    DATA_DIR = os.path.dirname(sys.executable)
+else:
+    RESOURCE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATA_DIR = RESOURCE_DIR
 
 
 def _migrate_columns(db, table, columns):
@@ -32,11 +57,15 @@ def _migrate_columns(db, table, columns):
 
 
 def create_app(test_config=None):
-    app = Flask(__name__)
+    # Explicit folders (RESOURCE_DIR, not __file__) so a frozen .exe finds
+    # the bundled templates/static that PyInstaller's --add-data unpacked
+    # into its temp dir — see the RESOURCE_DIR/DATA_DIR comment above.
+    app = Flask(__name__, template_folder=os.path.join(RESOURCE_DIR, 'templates'),
+                static_folder=os.path.join(RESOURCE_DIR, 'static'))
     app.secret_key = os.environ.get('SECRET_KEY', 'pulse-dev-secret-change-me')
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
     app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
-    url = os.environ.get('DATABASE_URL', 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'pulse.db'))
+    url = os.environ.get('DATABASE_URL', 'sqlite:///' + os.path.join(DATA_DIR, 'pulse.db'))
     if url.startswith('postgres://'):
         url = 'postgresql://' + url[len('postgres://'):]
     app.config['SQLALCHEMY_DATABASE_URI'] = url
@@ -47,7 +76,7 @@ def create_app(test_config=None):
     app.config['APK_URL'] = os.environ.get('APK_DOWNLOAD_URL',
                                            'https://github.com/AcsVe/Pulse/releases/latest/download/Pulse.apk')
     app.config['CRON_KEY'] = os.environ.get('CRON_KEY', '')
-    app.config['SCREENS_DIR'] = os.environ.get('SCREENS_DIR', os.path.join(os.path.dirname(__file__), 'instance', 'screens'))
+    app.config['SCREENS_DIR'] = os.environ.get('SCREENS_DIR', os.path.join(DATA_DIR, 'instance', 'screens'))
     if test_config:
         app.config.update(test_config)
     db.init_app(app)
@@ -1040,4 +1069,17 @@ def create_app(test_config=None):
 app = create_app()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    if getattr(sys, 'frozen', False):
+        # debug=True's auto-reloader re-execs sys.argv[0] on every code
+        # change it detects — harmless for `python app.py`, but inside a
+        # frozen PyInstaller .exe that means re-launching (and re-extracting
+        # a --onefile build) itself, which is pointless for someone just
+        # double-clicking a packaged .exe and can misbehave depending on how
+        # it was built. Print the URL plainly instead of relying on the
+        # debug console, since a double-clicked .exe's window may close
+        # before anyone reads a crash underneath it.
+        print(f'Pulse server starting — open http://localhost:{port} (or this computer\'s LAN IP) in a browser.')
+        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    else:
+        app.run(host='0.0.0.0', port=port, debug=True)

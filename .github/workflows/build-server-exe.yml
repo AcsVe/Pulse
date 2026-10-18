@@ -1,0 +1,71 @@
+name: Build Pulse Server (Windows .exe)
+
+# Packages server/ into a single standalone Windows executable with
+# PyInstaller and publishes it as a GitHub Release asset, so the stable link
+#   https://github.com/<owner>/<repo>/releases/latest/download/Pulse-Server.exe
+# always serves the newest build. This lets anyone grab a ready-to-run
+# server for a Windows machine without installing Python or cloning the
+# repo there themselves — trigger this workflow from anywhere (including a
+# phone's browser), then just download and double-click the .exe on the
+# Windows machine that will actually run it.
+#
+# Must run on a Windows runner: PyInstaller builds an executable for
+# whatever OS it runs on, not whatever OS someone wants to run it on later —
+# it cannot cross-compile a Windows .exe from Linux/Android/Termux, which is
+# exactly why this lives in CI instead of being something to run locally on
+# a phone.
+#
+# The .exe is portable but NOT silently auto-updating: a code change here
+# needs this workflow re-run (and the new .exe re-downloaded) to take
+# effect, same as the Android APKs. pulse.db and instance/screens/ are
+# created next to wherever the .exe itself is placed, and persist across
+# restarts there — see app.py's DATA_DIR comment.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/build-server-exe.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: server
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Pulse-Server.exe
+        working-directory: server
+        run: |
+          pyinstaller --onefile --name Pulse-Server --add-data "templates;templates" --add-data "static;static" app.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pulse-Server-exe
+          path: server/dist/Pulse-Server.exe
+
+      - name: Publish release (stable download link)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete server-exe-latest --cleanup-tag --yes || true
+          gh release create server-exe-latest server/dist/Pulse-Server.exe \
+            --title "Pulse Server (Windows)" \
+            --notes "Standalone Windows server build. Built from ${GITHUB_SHA::7}. Download, place in its own folder, and double-click to run — it listens on port 5000 by default." \
+            --latest
