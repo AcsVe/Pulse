@@ -116,6 +116,14 @@ Pulse-Setup.exe fingerprint    # prints just the fingerprint, to send to the dev
 Pulse-Setup.exe license <key>  # activates the key the developer sends back
 ```
 
+To re-link a device to a different server (or after a linking code expired),
+either re-run the installer and check "re-link this device" on its first
+page, or — faster, without the full wizard — double-click `relink.bat` in
+the install folder (as Administrator): it just asks for the server URL and
+a fresh linking code (get one from the dashboard's Devices tab, the small
+"↻ New code" button next to the device) and runs the enroll step itself,
+instead of typing `Pulse-Setup.exe enroll <url> <code>` by hand.
+
 The installer's second wizard page does the same thing up front (shows the
 fingerprint, takes the key if you already have one). The fingerprint is
 Windows' own per-install identifier — unique per PC, stable across

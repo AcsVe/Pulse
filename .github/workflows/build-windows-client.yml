@@ -86,6 +86,7 @@ jobs:
           Copy-Item dist\PulseService out\PulseService -Recurse
           Copy-Item dist\PulseHelper out\PulseHelper -Recurse
           if (Test-Path README.md) { copy README.md out\ }
+          if (Test-Path relink.bat) { copy relink.bat out\ }
           $dlls = "${{ steps.pywin32dlls.outputs.dir }}"
           if (Test-Path $dlls) {
             copy "$dlls\*.dll" out\PulseService\

@@ -87,6 +87,7 @@ Source: "{#SourceDir}\Pulse-Setup.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\PulseService\*"; DestDir: "{app}\PulseService"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceDir}\PulseHelper\*"; DestDir: "{app}\PulseHelper"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#SourceDir}\relink.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "pulse.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Run]
