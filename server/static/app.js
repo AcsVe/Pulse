@@ -1624,10 +1624,40 @@ function renderTabs() {
 // for why (tabs either wrapped onto their own row on every screen, or
 // scrolled sideways with later ones clipped off and no hint more existed).
 function renderSidebar() {
-  const sb = $('#sidebar'); if (!sb) return;
+  // Targets #sidebarTabs, not #sidebar itself — #sidebar also holds
+  // #sidebarControls (the header's period/date/device/export controls,
+  // moved in on mobile by syncControlsPlacement()), and rebuilding the
+  // whole sidebar's innerHTML here would silently throw that moved node
+  // away on every single render.
+  const sb = $('#sidebarTabs'); if (!sb) return;
   const vis = visibleTabs();
   sb.innerHTML = vis.map(([k]) => `<button class="tab ${S.tab === k ? 'on' : ''}" data-t="${k}">${t(TAB_LABELS[k] || k)}</button>`).join('');
   sb.querySelectorAll('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.t; closeSidebar(); renderTabs(); renderSidebar(); load(); });
+}
+
+// The header's .controls (period chips, date range, device picker, lang/
+// refresh/export/logout buttons) is what was overflowing/getting clipped
+// at the edge of the screen on narrow phones — .top wraps as a whole, but
+// once .controls landed alone on its own wrapped line it was still wider
+// than the viewport (several buttons + two date inputs + the chips row),
+// and nothing forced it to reflow into multiple visible rows instead of
+// spilling past the edge. Rather than fight that with ever-more-specific
+// mobile CSS, the same node that's already used for it is physically
+// moved into the sidebar drawer below 760px — same pattern as .tabs
+// already moving into the sidebar's tab list on mobile, and it reuses the
+// exact same DOM element (not a clone), so every already-wired event
+// handler (chip clicks, date inputs, the export/logout buttons, etc.)
+// keeps working untouched regardless of which parent it's sitting in.
+const MOBILE_MQ = window.matchMedia('(max-width:760px)');
+function syncControlsPlacement() {
+  const controls = $('#controls'), top = document.querySelector('header.top'),
+    sbControls = $('#sidebarControls'), kioskInfo = $('#kioskInfo');
+  if (!controls || !top || !sbControls) return;  // kiosk mode has neither sidebar nor #sidebarControls
+  if (MOBILE_MQ.matches) {
+    if (controls.parentElement !== sbControls) sbControls.appendChild(controls);
+  } else if (controls.parentElement !== top) {
+    if (kioskInfo) top.insertBefore(controls, kioskInfo); else top.appendChild(controls);
+  }
 }
 function openSidebar() {
   const sb = $('#sidebar'), bd = $('#sidebarBackdrop'); if (!sb || !bd) return;
@@ -1636,6 +1666,7 @@ function openSidebar() {
   // stale one, and this makes the drawer self-healing regardless of what
   // order init() ran its other steps in.
   try { renderSidebar(); } catch (e) { console.error('Pulse: renderSidebar failed', e); }
+  try { syncControlsPlacement(); } catch (e) { console.error('Pulse: syncControlsPlacement failed', e); }
   sb.hidden = false; bd.hidden = false;
   requestAnimationFrame(() => sb.classList.add('open'));
 }
@@ -1740,6 +1771,12 @@ async function init() {
   // now picks an exact start/end moment, not just whole days.
   const onRange = () => { if (fd.value && td.value) { S.from = new Date(fd.value).getTime(); S.to = new Date(td.value).getTime(); load(); } };
   fd.onchange = td.onchange = onRange;
+  syncControlsPlacement();
+  // addListener/removeListener is the deprecated form, but still needed
+  // for older WebView-based Android browsers; addEventListener alone is
+  // enough everywhere else and is tried first.
+  if (MOBILE_MQ.addEventListener) MOBILE_MQ.addEventListener('change', syncControlsPlacement);
+  else if (MOBILE_MQ.addListener) MOBILE_MQ.addListener(syncControlsPlacement);
   paintStatic();
   initChartTooltip();
   startDevicesLive();

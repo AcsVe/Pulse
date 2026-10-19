@@ -35,7 +35,16 @@
 </header>
 {% if not kiosk %}<nav class="tabs" id="tabs"></nav>
 <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
-<nav class="sidebar" id="sidebar" hidden></nav>{% endif %}
+<nav class="sidebar" id="sidebar" hidden>
+  <!-- #controls (period chips, date range, device picker, language/refresh/
+       export/logout buttons) gets physically moved in here from the header
+       on narrow screens — see app.js's syncControlsPlacement(). Keeping a
+       dedicated #sidebarTabs target means renderSidebar() can keep
+       rebuilding just the tab list via innerHTML without wiping out
+       whatever was moved into #sidebarControls alongside it. -->
+  <div class="sidebar-controls" id="sidebarControls"></div>
+  <div class="sidebar-tabs" id="sidebarTabs"></div>
+</nav>{% endif %}
 <main id="main"></main>
 <div class="toast" id="toast"></div>
 <div class="modal-wrap" id="remoteModal" hidden></div>
