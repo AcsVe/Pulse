@@ -66,7 +66,23 @@ def cmd_enroll(args):
     if len(args) != 2:
         print('Usage: Pulse-Setup.exe enroll <serverUrl> <code>')
         sys.exit(1)
+    require_admin()
     server_url, code = args
+    # Only cmd_install() used to call this — fine for the installer's own
+    # enroll-then-install sequence, since that whole sequence already runs
+    # under the installer's own full elevation (Administrators have
+    # implicit full control of ProgramData regardless of this ACL). But
+    # enroll can also run standalone later (relink.bat, or "enroll" typed
+    # by hand to re-link a device), on a folder whose ACL was never granted
+    # to begin with — a device enrolled by an older build before this
+    # icacls step existed, say. ProgramData's own default ACL gives
+    # standard Users only READ access, not write, so sqlite then fails with
+    # "attempt to write a readonly database" — a confusing error for
+    # something that's really just a missing permission grant. Doing this
+    # here too, defensively, makes enroll self-sufficient regardless of
+    # install order or a device's ACL history. (Needs require_admin() above
+    # it, same as install — granting an ACL generally needs elevation too.)
+    _grant_programdata_access()
     try:
         res = uploader.enroll(server_url, code)
         print(f"Enrolled as '{res.get('name')}' (device id {res.get('deviceId')}).")
