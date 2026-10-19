@@ -58,10 +58,17 @@ as Administrator. It:
   program" error to work around by hand;
 - excludes itself from Windows Defender scanning automatically (and
   removes that exclusion again on uninstall) — no separate step;
-- asks once, on a single wizard page, for the server URL and the one-time
+- asks, on a single wizard page, for the server URL and the one-time
   linking code the dashboard shows when you add a device, then runs the
   `enroll` and `install` steps itself. On an upgrade (re-running the
-  installer once already enrolled) this page is skipped automatically;
+  installer once already enrolled) the fields start out disabled behind a
+  "this device is already linked — check this to re-link it" checkbox,
+  rather than the page disappearing with no way back — check it to point
+  the device at a different server, or to use a fresh code if the old one
+  expired. A fresh code for an already-linked device comes from the same
+  "↻ New code" button next to it on the dashboard's Devices tab. If enroll
+  or install actually fails, you now get a real error dialog with the exit
+  code instead of the wizard silently finishing;
 - shows a second wizard page with this device's fingerprint (send it to
   the developer) and a box to paste an activation key if you already have
   one — see "Licensing" below. You can leave the key blank and activate

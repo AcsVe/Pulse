@@ -16,9 +16,22 @@
 ;     (and removed again on uninstall) with no separate step or prompt —
 ;     "تخطي أو إضافة exclude in MSsecurity بدون أي عناء".
 ;   - One wizard page collects the server URL + one-time linking code
-;     (skipped automatically on an upgrade, once pulse.db already exists)
 ;     and the installer itself runs "enroll" then "install" — no command
-;     line, no separate steps to get wrong.
+;     line, no separate steps to get wrong. On an upgrade (pulse.db already
+;     exists) the fields start out disabled behind a "re-link this device"
+;     checkbox instead of being skipped outright — the first version of
+;     this page always skipped itself once a device had ever enrolled,
+;     with literally no way back into it short of the raw CLI command,
+;     which is exactly what "no option to update the Windows link" meant
+;     in practice. Re-linking reuses the dashboard's existing Devices tab
+;     "↻ New code" button (server/static/app.js) — that already worked
+;     server-side; the installer just never exposed a way to use it again.
+;   - Both the enroll and install steps now run through Code (CurStepChanged)
+;     instead of a declarative [Run] line, specifically so a failure is a
+;     real MsgBox with the exit code instead of silently finishing the
+;     wizard as if nothing went wrong — "tried it on another device, it
+;     didn't work" with zero detail is exactly what a silently-swallowed
+;     Exec() failure here looks like from the outside.
 ;   - A second wizard page shows this device's fingerprint (read directly
 ;     from the registry — the exact same value pulse_agent/license.py
 ;     reads at runtime) in a real, read-only edit box (Ctrl+A then Ctrl+C
@@ -82,9 +95,9 @@ Source: "pulse.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; SilentlyContinue means a managed/locked-down Defender policy just no-ops
 ; this instead of failing the install.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Add-MpPreference -ExclusionPath '{app}' -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated; StatusMsg: "Excluding Pulse from Windows Defender scanning..."
-Filename: "{app}\Pulse-Setup.exe"; Parameters: "enroll ""{code:GetServerUrl}"" ""{code:GetCode}"""; Flags: runhidden waituntilterminated; StatusMsg: "Connecting to your Pulse server..."; Check: NeedEnroll
-Filename: "{app}\Pulse-Setup.exe"; Parameters: "install"; Flags: runhidden waituntilterminated; StatusMsg: "Installing the Pulse service..."
-Filename: "{app}\Pulse-Setup.exe"; Parameters: "license ""{code:GetLicenseKey}"""; Flags: runhidden waituntilterminated; StatusMsg: "Activating your license..."; Check: HasLicenseKey
+; enroll/install/license themselves moved into CurStepChanged (below) so a
+; failure shows a real error instead of the wizard just finishing silently
+; — see the top-of-file note on "tried it on another device, it didn't work".
 
 [UninstallRun]
 Filename: "{app}\Pulse-Setup.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "PulseUninstall"
@@ -102,6 +115,7 @@ Type: filesandordirs; Name: "{commonappdata}\Pulse"
 [Code]
 var
   EnrollPage: TInputQueryWizardPage;
+  RelinkCheck: TNewCheckBox;
   LicensePage: TWizardPage;
   FingerprintEdit: TNewEdit;
   LicenseKeyEdit: TNewEdit;
@@ -128,14 +142,38 @@ begin
   Result := Uppercase(Guid);
 end;
 
+procedure RelinkCheckClick(Sender: TObject);
+begin
+  EnrollPage.Edits[0].Enabled := RelinkCheck.Checked;
+  EnrollPage.Edits[1].Enabled := RelinkCheck.Checked;
+end;
+
 procedure InitializeWizard;
 begin
   EnrollPage := CreateInputQueryPage(wpSelectDir,
     'Connect to your Pulse server', 'Enter the server address and one-time linking code',
-    'Open the dashboard on your server, add this device, and copy the server URL and the code it shows you. ' +
-    'You can skip this if you already ran "enroll" yourself — this step is skipped automatically on an upgrade.');
+    'Open the dashboard on your server, add this device (or, for a device that''s already linked, use its ' +
+    '"↻ New code" button on the Devices tab), and copy the server URL and the code it shows you.');
   EnrollPage.Add('Server URL (e.g. https://pulse.example.com):', False);
   EnrollPage.Add('Linking code:', False);
+
+  // Earlier versions of this page skipped itself entirely once pulse.db
+  // existed, with no way back in short of running "Pulse-Setup.exe enroll"
+  // by hand — reported as "no option to update the Windows link". Now the
+  // page always shows; on an upgrade the fields just start out disabled
+  // behind this checkbox so a normal update doesn't re-prompt for nothing,
+  // but re-linking to a different server (or after a lost/expired code) is
+  // one click away instead of a CLI command nobody's told about.
+  RelinkCheck := TNewCheckBox.Create(EnrollPage);
+  RelinkCheck.Parent := EnrollPage.Surface;
+  RelinkCheck.Top := EnrollPage.Edits[1].Top + EnrollPage.Edits[1].Height + ScaleY(12);
+  RelinkCheck.Width := EnrollPage.SurfaceWidth;
+  RelinkCheck.Caption := 'This device is already linked — check this to re-link it (new server and/or new code)';
+  RelinkCheck.Checked := not DBExists;
+  RelinkCheck.Visible := DBExists;
+  RelinkCheck.OnClick := @RelinkCheckClick;
+  EnrollPage.Edits[0].Enabled := RelinkCheck.Checked;
+  EnrollPage.Edits[1].Enabled := RelinkCheck.Checked;
 
   // A plain CreateInputQueryPage description is a static label, not a real
   // control — it can't be click-selected or Ctrl+C'd, which is exactly
@@ -182,17 +220,22 @@ begin
   LicenseKeyEdit.Width := LicensePage.SurfaceWidth;
 end;
 
+// The page is never skipped any more (see InitializeWizard's comment) — it
+// always shows, so there's always a way back into it.
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
-  if (EnrollPage <> nil) and (PageID = EnrollPage.ID) and DBExists then
-    Result := True;
+end;
+
+function NeedEnroll: Boolean;
+begin
+  Result := (not DBExists) or RelinkCheck.Checked;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if (EnrollPage <> nil) and (CurPageID = EnrollPage.ID) then begin
+  if (EnrollPage <> nil) and (CurPageID = EnrollPage.ID) and NeedEnroll then begin
     if (Trim(EnrollPage.Values[0]) = '') or (Trim(EnrollPage.Values[1]) = '') then begin
       MsgBox('Please enter both the server URL and the linking code.', mbError, MB_OK);
       Result := False;
@@ -210,11 +253,6 @@ begin
   Result := EnrollPage.Values[1];
 end;
 
-function NeedEnroll: Boolean;
-begin
-  Result := not DBExists;
-end;
-
 function GetLicenseKey(Param: string): string;
 begin
   Result := Trim(LicenseKeyEdit.Text);
@@ -228,6 +266,8 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
+  ExePath, Msg: string;
+  Ok: Boolean;
 begin
   if CurStep = ssInstall then begin
     // Stop anything already running BEFORE we overwrite its files — this is
@@ -238,5 +278,47 @@ begin
     if FileExists(ExpandConstant('{app}\PulseService\PulseService.exe')) then
       Exec(ExpandConstant('{app}\PulseService\PulseService.exe'), 'stop', '',
         SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+
+  // enroll/install/license run from here rather than a declarative [Run]
+  // line specifically so a failure is a real MsgBox with the exit code
+  // instead of the wizard just finishing as if nothing went wrong — that
+  // silence is exactly what "tried it on another device, it didn't work"
+  // (with no further detail to go on) looks like from the outside.
+  if CurStep = ssPostInstall then begin
+    ExePath := ExpandConstant('{app}\Pulse-Setup.exe');
+
+    if NeedEnroll then begin
+      WizardForm.StatusLabel.Caption := 'Connecting to your Pulse server...';
+      WizardForm.StatusLabel.Repaint;
+      Ok := Exec(ExePath, Format('enroll "%s" "%s"', [GetServerUrl(''), GetCode('')]),
+        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      if (not Ok) or (ResultCode <> 0) then begin
+        Msg := 'Could not link this device to the server (exit code ' + IntToStr(ResultCode) + ').' + #13#10 +
+          'Double-check the server URL and the linking code (it''s one-time and expires), then either ' +
+          'run this installer again or, from an elevated Command Prompt:' + #13#10#13#10 +
+          '"' + ExePath + '" enroll "<server URL>" "<code>"';
+        MsgBox(Msg, mbError, MB_OK);
+      end;
+    end;
+
+    WizardForm.StatusLabel.Caption := 'Installing the Pulse service...';
+    WizardForm.StatusLabel.Repaint;
+    Ok := Exec(ExePath, 'install', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if (not Ok) or (ResultCode <> 0) then begin
+      Msg := 'Installing the Pulse service failed (exit code ' + IntToStr(ResultCode) + ').' + #13#10 +
+        'Run this from an elevated Command Prompt to see the full error:' + #13#10#13#10 +
+        '"' + ExePath + '" install';
+      MsgBox(Msg, mbError, MB_OK);
+    end;
+
+    if HasLicenseKey then begin
+      WizardForm.StatusLabel.Caption := 'Activating your license...';
+      WizardForm.StatusLabel.Repaint;
+      Exec(ExePath, 'license "' + GetLicenseKey('') + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      // Not fatal if this one fails — install/enroll already succeeded, and
+      // the key can always be entered again later via "Pulse-Setup.exe
+      // license <key>" or by re-running this installer.
+    end;
   end;
 end;
