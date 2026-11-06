@@ -37,7 +37,7 @@ production (SQLite is the local-dev default).
 GitHub Actions workflow packages the server into a standalone
 `Pulse-Server.exe` with PyInstaller — trigger it from Actions (works fine
 from a phone's browser) and download the result from
-`https://github.com/<owner>/<repo>/releases/latest/download/Pulse-Server.exe`.
+`https://github.com/AcsVe/downloads/releases/download/pulse-server-exe-latest/Pulse-Server.exe`.
 Put it in its own folder and double-click it; it listens on port 5000 and
 creates `pulse.db`/`instance/` next to itself, which persist across restarts.
 Rebuild (re-run the workflow, re-download) after any server code change —

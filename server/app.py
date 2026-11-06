@@ -74,7 +74,7 @@ def create_app(test_config=None):
     app.config['ADMIN_PASS'] = os.environ.get('ADMIN_PASS', 'pulse2026')
     app.config['SCREEN_KEY'] = os.environ.get('SCREEN_KEY', '')   # read-only kiosk key for the smart screen
     app.config['APK_URL'] = os.environ.get('APK_DOWNLOAD_URL',
-                                           'https://github.com/AcsVe/Pulse/releases/latest/download/Pulse.apk')
+                                           'https://github.com/AcsVe/downloads/releases/download/pulse-apk-latest/Pulse.apk')
     app.config['CRON_KEY'] = os.environ.get('CRON_KEY', '')
     app.config['SCREENS_DIR'] = os.environ.get('SCREENS_DIR', os.path.join(DATA_DIR, 'instance', 'screens'))
     if test_config:

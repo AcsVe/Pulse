@@ -19,7 +19,7 @@ $here    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $exePath = Join-Path $here 'Pulse-Server.exe'
 $oldPath = Join-Path $here 'Pulse-Server.old.exe'
 $tmpPath = Join-Path $here 'Pulse-Server.new.exe'
-$url     = 'https://github.com/AcsVe/Pulse/releases/latest/download/Pulse-Server.exe'
+$url     = 'https://github.com/AcsVe/downloads/releases/download/pulse-server-exe-latest/Pulse-Server.exe'
 
 Write-Host "Stopping Pulse-Server.exe if it's running..."
 Get-Process -Name 'Pulse-Server' -ErrorAction SilentlyContinue | Stop-Process -Force

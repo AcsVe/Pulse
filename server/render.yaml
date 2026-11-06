@@ -15,7 +15,7 @@ services:
       - key: SCREEN_KEY
         sync: false
       - key: APK_DOWNLOAD_URL
-        value: https://github.com/AcsVe/Pulse/releases/latest/download/Pulse.apk
+        value: https://github.com/AcsVe/downloads/releases/download/pulse-apk-latest/Pulse.apk
       - key: DATABASE_URL
         fromDatabase:
           name: pulse-db
