@@ -91,7 +91,11 @@ jobs:
 
       - name: Publish release (stable download link)
         env:
-          GH_TOKEN: ${{ github.token }}
+          # DOWNLOADS_TOKEN (رمز بصلاحية الكتابة على AcsVe/downloads): يُنشر الملف في مستودع التحميلات العام
+          # بوسم يبدأ باسم النظام؛ وبدونه يُنشر هنا كما كان (فلا يتوقف البناء قبل إضافة الرمز)
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          GH_REPO: ${{ secrets.DOWNLOADS_TOKEN && 'AcsVe/downloads' || github.repository }}
+          PFX: ${{ secrets.DOWNLOADS_TOKEN && 'pulse-' || '' }}
         # Deliberately NOT --latest: build-apk.yml's "apk-latest" release is
         # what /releases/latest/download/... resolves to for the collector
         # app's stable link, and marking this one --latest too would steal
@@ -100,7 +104,7 @@ jobs:
         # /releases/download/admin-apk-latest/PulseAdmin.apk — same idea,
         # just addressed by tag instead of by the repo-wide "latest" marker.
         run: |
-          gh release delete admin-apk-latest --cleanup-tag --yes || true
-          gh release create admin-apk-latest out/PulseAdmin.apk \
+          gh release delete ${PFX}admin-apk-latest --cleanup-tag --yes || true
+          gh release create ${PFX}admin-apk-latest out/PulseAdmin.apk \
             --title "Pulse Admin app" \
             --notes "Dashboard viewer app for admins. Built from ${GITHUB_SHA::7}."

@@ -128,12 +128,16 @@ jobs:
       - name: Publish release (stable download link)
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          # DOWNLOADS_TOKEN (رمز بصلاحية الكتابة على AcsVe/downloads): يُنشر الملف في مستودع التحميلات العام
+          # بوسم يبدأ باسم النظام؛ وبدونه يُنشر هنا كما كان (فلا يتوقف البناء قبل إضافة الرمز)
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          GH_REPO: ${{ secrets.DOWNLOADS_TOKEN && 'AcsVe/downloads' || github.repository }}
+          PFX: ${{ secrets.DOWNLOADS_TOKEN && 'pulse-' || '' }}
         run: |
-          gh release delete windows-client-latest --cleanup-tag --yes || true
-          gh release create windows-client-latest \
+          gh release delete ${PFX}windows-client-latest --cleanup-tag --yes || true
+          gh release create ${PFX}windows-client-latest \
             windows-client/Pulse-Windows-Client.zip \
             windows-client/installer/Pulse-Setup-Installer.exe \
             --title "Pulse Windows client" \
             --notes "Recommended: download Pulse-Setup-Installer.exe and run it as Administrator — it stops any old version, installs to a fixed folder, excludes itself from Windows Defender, and asks once for the server URL + linking code (skipped automatically on an upgrade). Built from ${GITHUB_SHA::7}. The Pulse-Windows-Client.zip (Pulse-Setup.exe + PulseService/ + PulseHelper/) remains available for manual installs: Pulse-Setup.exe enroll <serverUrl> <code>, then Pulse-Setup.exe install." \
-            --latest
+            --latest=$( [ -n "$PFX" ] && echo false || echo true )
