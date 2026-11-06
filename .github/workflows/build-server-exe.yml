@@ -68,10 +68,14 @@ jobs:
       - name: Publish release (stable download link)
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          # DOWNLOADS_TOKEN (رمز بصلاحية الكتابة على AcsVe/downloads): يُنشر الملف في مستودع التحميلات العام
+          # بوسم يبدأ باسم النظام؛ وبدونه يُنشر هنا كما كان (فلا يتوقف البناء قبل إضافة الرمز)
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN || github.token }}
+          GH_REPO: ${{ secrets.DOWNLOADS_TOKEN && 'AcsVe/downloads' || github.repository }}
+          PFX: ${{ secrets.DOWNLOADS_TOKEN && 'pulse-' || '' }}
         run: |
-          gh release delete server-exe-latest --cleanup-tag --yes || true
-          gh release create server-exe-latest server/dist/Pulse-Server.exe \
+          gh release delete ${PFX}server-exe-latest --cleanup-tag --yes || true
+          gh release create ${PFX}server-exe-latest server/dist/Pulse-Server.exe \
             --title "Pulse Server (Windows)" \
             --notes "Standalone Windows server build. Built from ${GITHUB_SHA::7}. Download, place in its own folder, and double-click to run — it listens on port 5000 by default." \
-            --latest
+            --latest=$( [ -n "$PFX" ] && echo false || echo true )
